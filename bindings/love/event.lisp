@@ -1,0 +1,6 @@
+(define-native pump)
+(define-native poll)
+(define-native push)
+(define-native wait)
+(define-native clear)
+(define-native quit)

@@ -1,0 +1,6 @@
+(define-native save-gamepad-mappings)
+(define-native set-gamepad-mapping)
+(define-native load-gamepad-mappings)
+(define-native get-gamepad-mapping)
+(define-native get-joysticks)
+(define-native get-joystick-count)

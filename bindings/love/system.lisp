@@ -1,0 +1,7 @@
+(define-native set-clipboard-text)
+(define-native vibrate)
+(define-native open-url)
+(define-native get-power-info)
+(define-native get-clipboard-text)
+(define-native get-os)
+(define-native get-processor-count)

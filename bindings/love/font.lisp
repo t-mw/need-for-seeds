@@ -1,0 +1,5 @@
+(define-native new-image-rasterizer)
+(define-native new-glyph-data)
+(define-native new-true-type-rasterizer)
+(define-native new-b-m-font-rasterizer)
+(define-native new-rasterizer)

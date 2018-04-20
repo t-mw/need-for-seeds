@@ -1,0 +1,26 @@
+if not love then love = {} end
+if not love.physics then love.physics = {} end
+return {
+	["new-mouse-joint"] = { tag = "var", contents = "love.physics.newMouseJoint", value = love.physics.newMouseJoint},
+	["new-pulley-joint"] = { tag = "var", contents = "love.physics.newPulleyJoint", value = love.physics.newPulleyJoint},
+	["new-fixture"] = { tag = "var", contents = "love.physics.newFixture", value = love.physics.newFixture},
+	["set-meter"] = { tag = "var", contents = "love.physics.setMeter", value = love.physics.setMeter},
+	["get-meter"] = { tag = "var", contents = "love.physics.getMeter", value = love.physics.getMeter},
+	["new-wheel-joint"] = { tag = "var", contents = "love.physics.newWheelJoint", value = love.physics.newWheelJoint},
+	["new-rectangle-shape"] = { tag = "var", contents = "love.physics.newRectangleShape", value = love.physics.newRectangleShape},
+	["new-friction-joint"] = { tag = "var", contents = "love.physics.newFrictionJoint", value = love.physics.newFrictionJoint},
+	["get-distance"] = { tag = "var", contents = "love.physics.getDistance", value = love.physics.getDistance},
+	["new-motor-joint"] = { tag = "var", contents = "love.physics.newMotorJoint", value = love.physics.newMotorJoint},
+	["new-rope-joint"] = { tag = "var", contents = "love.physics.newRopeJoint", value = love.physics.newRopeJoint},
+	["new-body"] = { tag = "var", contents = "love.physics.newBody", value = love.physics.newBody},
+	["new-revolute-joint"] = { tag = "var", contents = "love.physics.newRevoluteJoint", value = love.physics.newRevoluteJoint},
+	["new-edge-shape"] = { tag = "var", contents = "love.physics.newEdgeShape", value = love.physics.newEdgeShape},
+	["new-world"] = { tag = "var", contents = "love.physics.newWorld", value = love.physics.newWorld},
+	["new-prismatic-joint"] = { tag = "var", contents = "love.physics.newPrismaticJoint", value = love.physics.newPrismaticJoint},
+	["new-polygon-shape"] = { tag = "var", contents = "love.physics.newPolygonShape", value = love.physics.newPolygonShape},
+	["new-weld-joint"] = { tag = "var", contents = "love.physics.newWeldJoint", value = love.physics.newWeldJoint},
+	["new-gear-joint"] = { tag = "var", contents = "love.physics.newGearJoint", value = love.physics.newGearJoint},
+	["new-distance-joint"] = { tag = "var", contents = "love.physics.newDistanceJoint", value = love.physics.newDistanceJoint},
+	["new-circle-shape"] = { tag = "var", contents = "love.physics.newCircleShape", value = love.physics.newCircleShape},
+	["new-chain-shape"] = { tag = "var", contents = "love.physics.newChainShape", value = love.physics.newChainShape},
+}

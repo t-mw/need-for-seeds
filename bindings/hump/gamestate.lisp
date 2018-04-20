@@ -1,0 +1,5 @@
+(define-native switch)
+(define-native current)
+(define-native push)
+(define-native pop)
+(define-native register-events)
