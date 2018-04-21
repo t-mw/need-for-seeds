@@ -45,12 +45,13 @@
           (* i harvester-head-width harvester-head-piece-fraction)))
 
 (defun to-1d-idx (x y sx)
-  (+ x (* sx y)))
+  (+ (- x 1) (* sx (- y 1)) 1))
 
 (defun from-1d-idx (idx sx sy)
-  (let ([x (mod idx sx)]
-        [y (mod (floor (/ idx sx)) sy)])
-    (values-list x y)))
+  (let* ([idx (- idx 1)]
+         [x (mod idx sx)]
+         [y (mod (floor (/ idx sx)) sy)])
+    (values-list (+ x 1) (+ y 1))))
 
 (defun field-max-idx ()
   (* field-width-tiles field-height-tiles))
