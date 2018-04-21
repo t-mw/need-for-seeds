@@ -36,6 +36,14 @@
 (define field-width-world (* field-width-tiles field-tile-size))
 (define field-height-world (* field-height-tiles field-tile-size))
 
+(define harvester-head-width 200)
+(define harvester-head-piece-count 10)
+(define harvester-head-piece-width (* 0.8 (/ harvester-head-width harvester-head-piece-count)))
+(define harvester-head-piece-fraction (/ 1 harvester-head-piece-count))
+(define harvester-head-positions
+  (dolist ([i (range :from 0 :to (- harvester-head-piece-count 1))])
+          (* i harvester-head-width harvester-head-piece-fraction)))
+
 (defun to-1d-idx (x y sx)
   (+ x (* sx y)))
 
@@ -77,7 +85,7 @@
 (defstruct physics
   (fields (mutable world)
           (mutable harvester-main)
-          (mutable harvester-head)))
+          (mutable harvester-head-pieces)))
 (define physics (make-physics))
 
 (define gamestate-start {})
@@ -123,15 +131,26 @@
           (.<! camera :smoother (hump/camera/smooth-damped 5)))
     (let* ([world (windfield/new-world 0 0 true)]
            [harvester-main (self world :newRectangleCollider (- start-x 40) (+ start-y 0) 80 80)]
-           [harvester-head (self world :newRectangleCollider (- start-x 100) (+ start-y 100) 200 10)])
+           [origin-x (- start-x 100)]
+           [origin-y (+ start-y 100)]
+           [harvester-head-pieces
+            (dolist ([pos harvester-head-positions])
+                    (self world :newRectangleCollider (+ origin-x pos) origin-y harvester-head-piece-width harvester-head-piece-width))])
       (set-physics-world! physics world)
       (set-physics-harvester-main! physics harvester-main)
-      (set-physics-harvester-head! physics harvester-head)
+      (set-physics-harvester-head-pieces! physics harvester-head-pieces)
       (self harvester-main :setLinearDamping 0.5)
-      (with (joint (self world :addJoint "RevoluteJoint" harvester-main harvester-head start-x (+ start-y 80) true))
-            (self joint :setLimitsEnabled true)
-            (self joint :setLowerLimit -0.4)
-            (self joint :setUpperLimit 0.4)))
+      (for i 1 harvester-head-piece-count 1
+           (let* ([piece (nth harvester-head-pieces i)]
+                  [joint (self world :addJoint "RevoluteJoint" harvester-main piece start-x (+ start-y 80) true)])
+             (with (next-i (+ i 1))
+                   (when (<= next-i harvester-head-piece-count)
+                         (let ([next-piece (nth harvester-head-pieces next-i)]
+                               [pos (nth harvester-head-positions next-i)])
+                               (self world :addJoint "WeldJoint" piece next-piece (+ origin-x pos) origin-y))))
+             (self joint :setLimitsEnabled true)
+             (self joint :setLowerLimit -0.4)
+             (self joint :setUpperLimit 0.4))))
     (set-state-field! state (make-field))))
 
 (defevent (gamestate-main :update) (dt)
