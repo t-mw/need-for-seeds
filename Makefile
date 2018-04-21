@@ -11,4 +11,5 @@ clean:
 build/main.lua: main.lisp
 	mkdir -p build
 	ln -sF ../assets build
+	ln -sF ../lib build
 	urn $(FLAGS) main.lisp
