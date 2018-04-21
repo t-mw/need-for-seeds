@@ -5,7 +5,8 @@
 (import hump/camera)
 (import hump/gamestate)
 (import lua/basic (mod))
-(import lua/math (cos sin pi floor random))
+(import lua/math (cos sin pi floor random randomseed))
+(import lua/os)
 (import love/graphics)
 (import love/keyboard)
 (import love/love (defevent))
@@ -32,11 +33,11 @@
 
 (define field-tile-size 30)
 (define field-width-tiles 20)
-(define field-height-tiles 100)
+(define field-height-tiles 200)
 (define field-width-world (* field-width-tiles field-tile-size))
 (define field-height-world (* field-height-tiles field-tile-size))
 
-(define harvester-head-width 300)
+(define harvester-head-width 200)
 (define harvester-head-piece-count 10)
 (define harvester-head-piece-width (* 0.8 (/ harvester-head-width harvester-head-piece-count)))
 (define harvester-head-piece-fraction (/ 1 harvester-head-piece-count))
@@ -111,6 +112,7 @@
   (configure-packages)
   (love-repl/initialize)
   (load-resources)
+  (randomseed (lua/os/time))
 
   (hump/gamestate/register-events)
   (hump/gamestate/switch gamestate-main))
@@ -147,8 +149,10 @@
                         (self piece :setCollisionClass "Head")
                         piece))]
          [obstacles
-          (dolist ([i (range :from 1 :to 15)])
-                  (let ([obstacle (self world :newCircleCollider (* (random) field-width-world) (* (random) field-height-world) 20)])
+          (dolist ([i (range :from 1 :to 40)])
+                  (let* ([pos-x (* (random) field-width-world)]
+                         [pos-y (+ (* 10 start-y) (* (random) (- field-height-world (* 10 start-y))))]
+                         [obstacle (self world :newCircleCollider pos-x pos-y 20)])
                     (self obstacle :setType "static")
                     (self obstacle :setCollisionClass "Obstacle")
                     obstacle))])
