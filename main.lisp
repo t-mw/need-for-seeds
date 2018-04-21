@@ -7,6 +7,7 @@
 (import lua/basic (mod))
 (import lua/math (cos sin pi floor random randomseed))
 (import lua/os)
+(import love/audio)
 (import love/graphics)
 (import love/keyboard)
 (import love/love (defevent))
@@ -85,8 +86,23 @@
   (fields (mutable pos)
           (mutable camera)
           (mutable harvester-head-pieces)
-          (mutable field)))
+          (mutable field)
+          (mutable moving)))
 (define state (make-state))
+
+(define audio-queue (list))
+(defun audio-queue-current ()
+  (car audio-queue))
+(defun audio-queue-push (source)
+  (push! audio-queue source)
+  (when (= (n audio-queue) 1)
+        (love/audio/play source)))
+(defun audio-queue-update ()
+  (when (audio-queue-current)
+        (when (not (self (audio-queue-current) :isPlaying))
+              (remove-nth! audio-queue 1))
+        (with (source (audio-queue-current))
+              (when source (love/audio/play source)))))
 
 (defstruct physics
   (fields (mutable world)
@@ -99,10 +115,24 @@
 (define gamestate-main {})
 (define gamestate-repl {})
 
-(define resources-test-image :mutable nil)
+(define resources-audio-hurt :mutable nil)
+(define resources-audio-engine :mutable nil)
+
+(define resources-music-intro :mutable nil)
+(define resources-music-loop :mutable nil)
 (defun load-resources ()
-  (setq! resources-test-image
-         (love/graphics/new-image "assets/test.png")))
+  (setq! resources-audio-engine
+         (love/audio/new-source "assets/audio-engine.wav" "static"))
+  (self resources-audio-engine :setLooping true)
+  (self resources-audio-engine :setVolume 0.2)
+  (setq! resources-audio-hurt
+         (love/audio/new-source "assets/audio-hurt.wav" "static"))
+
+  (setq! resources-music-intro
+         (love/audio/new-source "assets/music-intro.ogg" "stream"))
+  (setq! resources-music-loop
+         (love/audio/new-source "assets/music-loop.ogg" "stream"))
+  (self resources-music-loop :setLooping true))
 
 (defun configure-packages ()
   (.<! love-repl/*love-repl* :screenshot true)
@@ -131,6 +161,9 @@
     [?default]))
 
 (defevent (gamestate-main :enter) ()
+  (love/audio/stop)
+  (love/audio/play resources-audio-engine)
+
   (with (camera (hump/camera/new start-x start-y))
         (set-state-camera! state camera)
         (self camera :rotate pi)
@@ -170,9 +203,16 @@
                              [pos (nth harvester-head-positions next-i)])
                          (self world :addJoint "WeldJoint" piece next-piece (+ origin-x pos) origin-y)))))))
   (set-state-harvester-head-pieces! state (map (lambda () true) (physics-harvester-head-pieces physics)))
-  (set-state-field! state (make-field)))
+  (set-state-field! state (make-field))
+  (set-state-moving! state false))
 
 (defevent (gamestate-main :update) (dt)
+  (audio-queue-update)
+  (when (and (not (audio-queue-current)) (state-moving state))
+        (progn
+         (audio-queue-push resources-music-intro)
+         (audio-queue-push resources-music-loop)))
+
   (self (physics-world physics) :update dt)
   (let* ([(x y) (self (physics-harvester-main physics) :getPosition)]
         [camera (state-camera state)])
@@ -189,7 +229,7 @@
                      (let* ([(x y) (self piece :getPosition)]
                             [(tile-x tile-y) (field-tile-from-world x y)]
                             [idx (field-tile-to-1d-idx tile-x tile-y)])
-                       (when (field-is-valid-tile tile-x tile-y)
+                       (when (and (field-is-valid-tile tile-x tile-y) (nth (state-field state) idx))
                              (setq! (nth (state-field state) idx) false)))))))
 
     (let ([destroy-piece (lambda (i)
@@ -197,7 +237,8 @@
                                  (do ([joint (struct->list (self piece :getJointList))])
                                      (self joint :destroy))
                                  (self piece :setCollisionClass "Ghost")
-                                 (setq! (nth piece-states i) false)))]
+                                 (setq! (nth piece-states i) false)
+                                 (love/audio/play resources-audio-hurt)))]
           [mid-idx (floor (/ (n pieces) 2))])
       (with (tmp-state true)
             (for i (+ mid-idx 1) (n pieces) 1
@@ -212,14 +253,23 @@
                  (when (and (not tmp-state) (nth piece-states i))
                        (destroy-piece i))))))
 
-  (when (love/keyboard/is-down "up")
-        (let* ([angle (self (physics-harvester-main physics) :getAngle)]
-               [v (* 1000 (rotate (vector 0 1) angle))])
-          (self (physics-harvester-main physics) :applyForce (vector-item v 1) (vector-item v 2))))
-  (when (love/keyboard/is-down "left")
-        (self (physics-harvester-main physics) :applyAngularImpulse -1000))
-  (when (love/keyboard/is-down "right")
-        (self (physics-harvester-main physics) :applyAngularImpulse 1000)))
+  (let ([up (love/keyboard/is-down "up")]
+        [left (love/keyboard/is-down "left")]
+        [right (love/keyboard/is-down "right")])
+    (when up
+          (let* ([angle (self (physics-harvester-main physics) :getAngle)]
+                 [v (* 1000 (rotate (vector 0 1) angle))]
+                 [harvester-main (physics-harvester-main physics)])
+            (self harvester-main :applyForce (vector-item v 1) (vector-item v 2))))
+    (when left
+          (self (physics-harvester-main physics) :applyAngularImpulse -1000))
+    (when right
+          (self (physics-harvester-main physics) :applyAngularImpulse 1000))
+    (when (or up left right)
+          (set-state-moving! state true)))
+  (let* ([harvester-main (physics-harvester-main physics)]
+         [pitch (+ 1 (/ (norm (vector (self harvester-main :getLinearVelocity))) 100))])
+    (self resources-audio-engine :setPitch pitch)))
 
 (defevent (gamestate-main :draw) ()
   (setq! (nth (state-field state) 20) false)
