@@ -147,10 +147,7 @@
                    (when (<= next-i harvester-head-piece-count)
                          (let ([next-piece (nth harvester-head-pieces next-i)]
                                [pos (nth harvester-head-positions next-i)])
-                               (self world :addJoint "WeldJoint" piece next-piece (+ origin-x pos) origin-y))))
-             (self joint :setLimitsEnabled true)
-             (self joint :setLowerLimit -0.4)
-             (self joint :setUpperLimit 0.4))))
+                               (self world :addJoint "WeldJoint" piece next-piece (+ origin-x pos) origin-y)))))))
     (set-state-field! state (make-field))))
 
 (defevent (gamestate-main :update) (dt)
