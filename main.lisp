@@ -31,12 +31,12 @@
   (vector (.> s :x) (.> s :y)))
 
 (define field-tile-size 30)
-(define field-width-tiles 16)
+(define field-width-tiles 20)
 (define field-height-tiles 100)
 (define field-width-world (* field-width-tiles field-tile-size))
 (define field-height-world (* field-height-tiles field-tile-size))
 
-(define harvester-head-width 200)
+(define harvester-head-width 300)
 (define harvester-head-piece-count 10)
 (define harvester-head-piece-width (* 0.8 (/ harvester-head-width harvester-head-piece-count)))
 (define harvester-head-piece-fraction (/ 1 harvester-head-piece-count))
@@ -131,7 +131,7 @@
           (.<! camera :smoother (hump/camera/smooth-damped 5)))
     (let* ([world (windfield/new-world 0 0 true)]
            [harvester-main (self world :newRectangleCollider (- start-x 40) (+ start-y 0) 80 80)]
-           [origin-x (- start-x 100)]
+           [origin-x (- start-x (/ harvester-head-width 2))]
            [origin-y (+ start-y 100)]
            [harvester-head-pieces
             (dolist ([pos harvester-head-positions])
