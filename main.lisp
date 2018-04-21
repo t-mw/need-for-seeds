@@ -5,7 +5,7 @@
 (import hump/camera)
 (import hump/gamestate)
 (import lua/basic (mod))
-(import lua/math (cos sin pi floor))
+(import lua/math (cos sin pi floor random))
 (import love/graphics)
 (import love/keyboard)
 (import love/love (defevent))
@@ -44,6 +44,9 @@
   (dolist ([i (range :from 0 :to (- harvester-head-piece-count 1))])
           (* i harvester-head-width harvester-head-piece-fraction)))
 
+(define start-x (/ field-width-world 2))
+(define start-y 20)
+
 (defun to-1d-idx (x y sx)
   (+ (- x 1) (* sx (- y 1)) 1))
 
@@ -80,13 +83,15 @@
 (defstruct state
   (fields (mutable pos)
           (mutable camera)
+          (mutable harvester-head-pieces)
           (mutable field)))
 (define state (make-state))
 
 (defstruct physics
   (fields (mutable world)
           (mutable harvester-main)
-          (mutable harvester-head-pieces)))
+          (mutable harvester-head-pieces)
+          (mutable obstacles)))
 (define physics (make-physics))
 
 (define gamestate-start {})
@@ -124,44 +129,85 @@
     [?default]))
 
 (defevent (gamestate-main :enter) ()
-  (let ([start-x (/ field-width-world 2)]
-        [start-y 20])
-    (with (camera (hump/camera/new start-x start-y))
-          (set-state-camera! state camera)
-          (self camera :rotate pi)
-          (.<! camera :smoother (hump/camera/smooth-damped 5)))
-    (let* ([world (windfield/new-world 0 0 true)]
-           [harvester-main (self world :newRectangleCollider (- start-x 40) (+ start-y 0) 80 80)]
-           [origin-x (- start-x (/ harvester-head-width 2))]
-           [origin-y (+ start-y 100)]
-           [harvester-head-pieces
-            (dolist ([pos harvester-head-positions])
-                    (self world :newRectangleCollider (+ origin-x pos) origin-y harvester-head-piece-width harvester-head-piece-width))])
-      (set-physics-world! physics world)
-      (set-physics-harvester-main! physics harvester-main)
-      (set-physics-harvester-head-pieces! physics harvester-head-pieces)
-      (self harvester-main :setLinearDamping 0.5)
-      (for i 1 harvester-head-piece-count 1
-           (let* ([piece (nth harvester-head-pieces i)]
-                  [joint (self world :addJoint "RevoluteJoint" harvester-main piece start-x (+ start-y 80) true)])
-             (with (next-i (+ i 1))
-                   (when (<= next-i harvester-head-piece-count)
-                         (let ([next-piece (nth harvester-head-pieces next-i)]
-                               [pos (nth harvester-head-positions next-i)])
-                               (self world :addJoint "WeldJoint" piece next-piece (+ origin-x pos) origin-y)))))))
-    (set-state-field! state (make-field))))
+  (with (camera (hump/camera/new start-x start-y))
+        (set-state-camera! state camera)
+        (self camera :rotate pi)
+        (.<! camera :smoother (hump/camera/smooth-damped 5)))
+  (let* ([world (with (world (windfield/new-world 0 0 true))
+                      (self world :addCollisionClass "Head")
+                      (self world :addCollisionClass "Obstacle")
+                      (self world :addCollisionClass "Ghost" { :ignores { 1 "Head" 2 "Obstacle"} })
+                      world)]
+         [harvester-main (self world :newRectangleCollider (- start-x 40) (+ start-y 0) 80 80)]
+         [origin-x (- start-x (/ harvester-head-width 2))]
+         [origin-y (+ start-y 100)]
+         [harvester-head-pieces
+          (dolist ([pos harvester-head-positions])
+                  (with (piece (self world :newRectangleCollider (+ origin-x pos) origin-y harvester-head-piece-width harvester-head-piece-width))
+                        (self piece :setCollisionClass "Head")
+                        piece))]
+         [obstacles
+          (dolist ([i (range :from 1 :to 15)])
+                  (let ([obstacle (self world :newCircleCollider (* (random) field-width-world) (* (random) field-height-world) 20)])
+                    (self obstacle :setType "static")
+                    (self obstacle :setCollisionClass "Obstacle")
+                    obstacle))])
+    (set-physics-world! physics world)
+    (set-physics-harvester-main! physics harvester-main)
+    (set-physics-harvester-head-pieces! physics harvester-head-pieces)
+    (set-physics-obstacles! physics obstacles)
+    (self harvester-main :setLinearDamping 0.5)
+    (for i 1 harvester-head-piece-count 1
+         (let* ([piece (nth harvester-head-pieces i)]
+                [joint (self world :addJoint "RevoluteJoint" piece harvester-main start-x (+ start-y 80) true)])
+           (with (next-i (+ i 1))
+                 (when (<= next-i harvester-head-piece-count)
+                       (let ([next-piece (nth harvester-head-pieces next-i)]
+                             [pos (nth harvester-head-positions next-i)])
+                         (self world :addJoint "WeldJoint" piece next-piece (+ origin-x pos) origin-y)))))))
+  (set-state-harvester-head-pieces! state (map (lambda () true) (physics-harvester-head-pieces physics)))
+  (set-state-field! state (make-field)))
 
 (defevent (gamestate-main :update) (dt)
   (self (physics-world physics) :update dt)
   (let* ([(x y) (self (physics-harvester-main physics) :getPosition)]
         [camera (state-camera state)])
     (self camera :lockPosition x y))
-  (do ([piece (physics-harvester-head-pieces physics)])
-      (let* ([(x y) (self piece :getPosition)]
-             [(tile-x tile-y) (field-tile-from-world x y)]
-             [idx (field-tile-to-1d-idx tile-x tile-y)])
-        (when (field-is-valid-tile tile-x tile-y)
-              (setq! (nth (state-field state) idx) false))))
+  (let ([pieces (physics-harvester-head-pieces physics)]
+        [piece-states (state-harvester-head-pieces state)]
+        [to-destroy (list)])
+    (for i 1 (n pieces) 1
+         (let ([piece (nth pieces i)]
+               [piece-state (nth piece-states i)])
+           (when piece-state
+                 (if (self piece :enter "Obstacle")
+                     (push! to-destroy i)
+                     (let* ([(x y) (self piece :getPosition)]
+                            [(tile-x tile-y) (field-tile-from-world x y)]
+                            [idx (field-tile-to-1d-idx tile-x tile-y)])
+                       (when (field-is-valid-tile tile-x tile-y)
+                             (setq! (nth (state-field state) idx) false)))))))
+
+    (let ([destroy-piece (lambda (i)
+                           (with (piece (nth pieces i))
+                                 (do ([joint (struct->list (self piece :getJointList))])
+                                     (self joint :destroy))
+                                 (self piece :setCollisionClass "Ghost")
+                                 (setq! (nth piece-states i) false)))]
+          [mid-idx (floor (/ (n pieces) 2))])
+      (with (tmp-state true)
+            (for i (+ mid-idx 1) (n pieces) 1
+                 (when (elem? i to-destroy)
+                       (setq! tmp-state false))
+                 (when (and (not tmp-state) (nth piece-states i))
+                       (destroy-piece i))))
+      (with (tmp-state true)
+            (for i mid-idx 1 -1
+                 (when (elem? i to-destroy)
+                       (setq! tmp-state false))
+                 (when (and (not tmp-state) (nth piece-states i))
+                       (destroy-piece i))))))
+
   (when (love/keyboard/is-down "up")
         (let* ([angle (self (physics-harvester-main physics) :getAngle)]
                [v (* 1000 (rotate (vector 0 1) angle))])
