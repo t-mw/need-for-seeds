@@ -156,9 +156,6 @@ function repl.eval(text, add_to_history)
       -- Could be an expression instead of a statement -- try auto-adding return before it
       local err2
       func, err2 = loadstring("return " .. text)
-print("return "..text)
-print(inspect)
-print(inspect(state))
       if err2 then 
         repl.print('! Compilation error: ' .. err)
         return false
@@ -173,7 +170,6 @@ print(inspect(state))
     local result = pack(pcall(func))
     local ret = result[2]
     if result[1] then
-print(result[2])
       repl.append(true, text)
       local results, i = tostring(result[2]), 3
       if add_to_history then
