@@ -62,7 +62,7 @@
     result))
 
 (defun field-tile-from-world (x y)
-  (values-list (floor (/ x field-tile-size) (/ y field-tile-size))))
+  (values-list (floor (/ x field-tile-size)) (floor (/ y field-tile-size))))
 
 (defun field-tile-to-world (x y)
   (values-list (* x field-tile-size) (* y field-tile-size)))
@@ -155,9 +155,15 @@
 
 (defevent (gamestate-main :update) (dt)
   (self (physics-world physics) :update dt)
-  (let ([pos (vector (self (physics-harvester-main physics) :getPosition))]
+  (let* ([(x y) (self (physics-harvester-main physics) :getPosition)]
         [camera (state-camera state)])
-    (self camera :lockPosition (vector-x pos) (vector-y pos)))
+    (self camera :lockPosition x y))
+  (do ([piece (physics-harvester-head-pieces physics)])
+      (let* ([(x y) (self piece :getPosition)]
+             [(tile-x tile-y) (field-tile-from-world x y)]
+             [idx (field-tile-to-1d-idx tile-x tile-y)])
+        (when (field-is-valid-tile tile-x tile-y)
+              (setq! (nth (state-field state) idx) false))))
   (when (love/keyboard/is-down "up")
         (let* ([angle (self (physics-harvester-main physics) :getAngle)]
                [v (* 1000 (rotate (vector 0 1) angle))])
