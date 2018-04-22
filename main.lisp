@@ -237,6 +237,9 @@
                        (love/graphics/draw resources-sprite-corn quad x y c-rot)))))
     (self (physics-world physics) :draw)
 
+    (love/graphics/set-color 0 0 0 20)
+    (love/graphics/polygon "fill" (self (physics-harvester-main physics) :getWorldPoints (self (physics-harvester-main physics) :getPoints)))
+
     (love/graphics/set-color 255 255 255)
     (love/graphics/push)
     (love/graphics/scale -1 -1)
@@ -254,10 +257,11 @@
              (with ((x y) (position-from-body piece))
                    (self resources-model-blades :drawModel (- 0 x) (- 0 y))))))
 
-    (with (angle (self (physics-harvester-main physics) :getAngle))
-          (.<! resources-model-harvester :rotation (deg angle)))
-    (with ((x y) (physics-player-position physics))
-          (self resources-model-harvester :drawModel (- 0 x) (- 0 y)))
+    (let* ([(x y) (physics-player-position physics)]
+           [harvester-main (physics-harvester-main physics)]
+           [angle (self harvester-main :getAngle)])
+      (.<! resources-model-harvester :rotation (deg angle))
+      (self resources-model-harvester :drawModel (* -1 x) (- (* -1 y) 20)))
 
     (love/graphics/pop)
 
@@ -355,7 +359,7 @@
                       (self world :addCollisionClass "Obstacle")
                       (self world :addCollisionClass "Ghost" { :ignores { 1 "Head" 2 "Obstacle"} })
                       world)]
-         [harvester-main (self world :newRectangleCollider (- start-x 40) (+ start-y 0) 80 80)]
+         [harvester-main (self world :newRectangleCollider (- start-x 40) (+ start-y 0) 70 80)]
          [origin-x (- start-x (/ harvester-head-width 2))]
          [origin-y (+ start-y 100)]
          [harvester-head-pieces
