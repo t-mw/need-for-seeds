@@ -133,16 +133,29 @@
 (define audio-queue (list))
 (defun audio-queue-current ()
   (car audio-queue))
-(defun audio-queue-push (source)
+(defun audio-queue-push! (source)
   (push! audio-queue source)
   (when (= (n audio-queue) 1)
         (love/audio/play source)))
-(defun audio-queue-update ()
+(defun audio-queue-update! ()
   (when (audio-queue-current)
         (when (not (self (audio-queue-current) :isPlaying))
               (remove-nth! audio-queue 1))
         (with (source (audio-queue-current))
               (when source (love/audio/play source)))))
+
+(defstruct flying-corn
+  (fields (mutable pos)
+          (mutable dir)
+          (mutable start-time)
+          (mutable rand)))
+
+(defun flying-corn-frac (corn time)
+  (/ (- time (flying-corn-start-time corn)) 1))
+
+(define flying-corns :mutable (list))
+(defun flying-corns-push! (pos rand)
+  (push! flying-corns (make-flying-corn pos (* 0.5 pi (floor (* (random) 4))) (love/timer/get-time) rand)))
 
 (defstruct physics
   (fields (mutable world)
@@ -162,11 +175,13 @@
   (values-list player-x (+ player-y 200)))
 
 (defun handle-harvester-collisions ()
-  (let ([pieces (physics-harvester-head-pieces physics)]
-        [piece-states (state-harvester-head-pieces state)]
-        [field-data (field-data (state-field state))]
-        [field-tile-offset-y (field-tile-offset-y (state-field state))]
-        [to-destroy (list)])
+  (let* ([pieces (physics-harvester-head-pieces physics)]
+         [piece-states (state-harvester-head-pieces state)]
+         [field (state-field state)]
+         [field-data (field-data field)]
+         [field-rand (field-rand field)]
+         [field-tile-offset-y (field-tile-offset-y (state-field state))]
+         [to-destroy (list)])
     (for i 1 (n pieces) 1
          (let ([piece (nth pieces i)]
                [piece-state (nth piece-states i)])
@@ -178,6 +193,7 @@
                             [idx (field-tile-to-1d-idx tile-x tile-y)])
                        (when (and (field-is-valid-tile tile-x tile-y) (nth field-data idx))
                              (setq! (nth field-data idx) false)
+                             (flying-corns-push! (vector x y) (nth field-rand idx))
                              (set-state-score! state (+ (state-score state) 1))))))))
 
     (let ([destroy-piece (lambda (i)
@@ -204,6 +220,7 @@
 (defun world-draw ()
   (let* ([width (love/graphics/get-width)]
          [height (love/graphics/get-height)]
+         [time (love/timer/get-time)]
          [camera (state-camera state)]
          [c-x (floor (.> camera :x))]
          [c-y (floor (.> camera :y))]
@@ -224,63 +241,76 @@
 
     (do ([obstacle (physics-obstacles physics)])
         (let* ([(x y) (position-from-body obstacle)]
-               [width (self resources-sprite-stump :getWidth)]
-               [height (self resources-sprite-stump :getHeight)])
+               [width resources-sprite-stump-width]
+               [height resources-sprite-stump-height])
           (love/graphics/draw resources-sprite-stump x y c-rot 1 1 (/ width 2) (/ height 2))))
 
-    (for i (field-max-idx) 1 -1
-         (let* ([field (state-field state)]
-                [field-data (field-data field)]
-                [field-rand (field-rand field)]
-                [field-tile-offset-y (field-tile-offset-y field)]
-                [(tile-x tile-y) (field-tile-from-1d-idx i)]
-                [filled (nth field-data i)]
-                [rand (nth field-rand i)]
-                [quad-count (n resources-quads-corn)]
-                [(x y) (field-tile-to-world (+ tile-x 1) (+ tile-y 1) field-tile-offset-y)])
-           (when filled
-                 (with (quad (nth resources-quads-corn (+ (mod (+ rand 1) quad-count) 1)))
-                       (love/graphics/draw resources-sprite-corn quad x y c-rot))
-                 (with (quad (nth resources-quads-corn (+ (mod (+ rand 4) quad-count) 1)))
-                       (love/graphics/draw resources-sprite-corn quad x y c-rot)))))
-    (self (physics-world physics) :draw)
+    (let* ([rand-to-quad (lambda (rand)
+                           (nth resources-quads-corn (+ (mod rand (n resources-quads-corn)) 1)))]
+           [field (state-field state)]
+           [field-data (field-data field)]
+           [field-rand (field-rand field)]
+           [field-tile-offset-y (field-tile-offset-y field)])
+      (for i (field-max-idx) 1 -1
+           (let* ([(tile-x tile-y) (field-tile-from-1d-idx i)]
+                  [filled (nth field-data i)]
+                  [rand (nth field-rand i)]
+                  [(x y) (field-tile-to-world (+ tile-x 1) (+ tile-y 1) field-tile-offset-y)])
+             (when filled
+                   (with (quad (rand-to-quad (+ rand 1)))
+                         (love/graphics/draw resources-sprite-corn quad x y c-rot))
+                   (with (quad (rand-to-quad (+ rand 4)))
+                         (love/graphics/draw resources-sprite-corn quad x y c-rot)))))
+      (do ([flying-corn flying-corns])
+          (let* ([dir (+ (flying-corn-dir flying-corn) c-rot)]
+                 [frac (flying-corn-frac flying-corn time)]
+                 [distance (* 50 frac)]
+                 [height (* 80 (sin (* frac pi)))]
+                 [rand (flying-corn-rand flying-corn)]
+                 [quad (rand-to-quad rand)]
+                 [pos (flying-corn-pos flying-corn)]
+                 [x (floor (+ (vector-item pos 1) (* distance (cos dir))))]
+                 [y (floor (+ (vector-item pos 2) (* distance (sin dir)) height))])
+            (love/graphics/draw resources-sprite-corn quad x y dir 1 1 (/ resources-sprite-corn-width 2) (/ resources-sprite-corn-height 2))))
 
-    (love/graphics/set-color 0 0 0 20)
-    (love/graphics/polygon "fill" (self (physics-harvester-main physics) :getWorldPoints (self (physics-harvester-main physics) :getPoints)))
+      (self (physics-world physics) :draw)
 
-    (love/graphics/set-color 255 255 255)
-    (love/graphics/push)
-    (love/graphics/scale -1 -1)
+      (love/graphics/set-color 0 0 0 20)
+      (love/graphics/polygon "fill" (self (physics-harvester-main physics) :getWorldPoints (self (physics-harvester-main physics) :getPoints)))
 
-    (let* ([pieces (physics-harvester-head-pieces physics)]
-           [piece-states (state-harvester-head-pieces state)])
-      (for i 1 (n pieces) 1
-           (let ([piece (nth pieces i)]
-                 [piece-state (nth piece-states i)]
-                 [flip (= 0 (mod (+ (floor (/ (love/timer/get-time) 0.05)) (mod i 2)) 2))])
-             (with (angle (self piece :getAngle))
-                   (.<! resources-model-blades :rotation (deg angle)))
-             (.<! resources-model-blades :zoom 0.25)
-             (.<! resources-model-blades :flip (and piece-state flip))
-             (with ((x y) (position-from-body piece))
-                   (self resources-model-blades :drawModel (- 0 x) (- 0 y))))))
+      (love/graphics/set-color 255 255 255)
+      (love/graphics/push)
+      (love/graphics/scale -1 -1)
 
-    (let* ([(x y) (physics-player-position physics)]
-           [harvester-main (physics-harvester-main physics)]
-           [angle (self harvester-main :getAngle)])
-      (.<! resources-model-harvester :rotation (deg angle))
-      (self resources-model-harvester :drawModel (* -1 x) (- (* -1 y) 20)))
+      (let* ([pieces (physics-harvester-head-pieces physics)]
+             [piece-states (state-harvester-head-pieces state)])
+        (for i 1 (n pieces) 1
+             (let ([piece (nth pieces i)]
+                   [piece-state (nth piece-states i)]
+                   [flip (= 0 (mod (+ (floor (/ time 0.05)) (mod i 2)) 2))])
+               (with (angle (self piece :getAngle))
+                     (.<! resources-model-blades :rotation (deg angle)))
+               (.<! resources-model-blades :zoom 0.25)
+               (.<! resources-model-blades :flip (and piece-state flip))
+               (with ((x y) (position-from-body piece))
+                     (self resources-model-blades :drawModel (- 0 x) (- 0 y))))))
 
-    (love/graphics/pop)
+      (let* ([(x y) (physics-player-position physics)]
+             [harvester-main (physics-harvester-main physics)]
+             [angle (self harvester-main :getAngle)])
+        (.<! resources-model-harvester :rotation (deg angle))
+        (self resources-model-harvester :drawModel (* -1 x) (- (* -1 y) 20)))
 
-    ;; draw physics centers
-    ;; (love/graphics/set-color 255 255 255)
-    ;; (do ([o (physics-harvester-head-pieces physics)])
-    ;;     (let* ([(x y) (position-from-body o)])
-    ;;       (love/graphics/circle "fill" x y 5)))
-    ;; (love/graphics/line 0 200 field-width-world 200)
+      (love/graphics/pop)
 
-    (love/graphics/pop)))
+      ;; draw physics centers
+      ;; (love/graphics/set-color 255 255 255)
+      ;; (do ([o (physics-harvester-head-pieces physics)])
+      ;;     (let* ([(x y) (position-from-body o)])
+      ;;       (love/graphics/circle "fill" x y 5)))
+      ;; (love/graphics/line 0 200 field-width-world 200)
+
+      (love/graphics/pop))))
 
 (define gamestate-start {})
 (define gamestate-main {})
@@ -294,8 +324,13 @@
 (define resources-music-loop :mutable nil)
 
 (define resources-sprite-corn :mutable nil)
+(define resources-sprite-corn-width :mutable nil)
+(define resources-sprite-corn-height :mutable nil)
 (define resources-quads-corn (list))
+
 (define resources-sprite-stump :mutable nil)
+(define resources-sprite-stump-width :mutable nil)
+(define resources-sprite-stump-height :mutable nil)
 
 (define resources-model-blades :mutable nil)
 (define resources-model-harvester :mutable nil)
@@ -321,13 +356,18 @@
 
   (setq! resources-sprite-corn
          (love/graphics/new-image "assets/sprite-corn.png"))
+  (setq! resources-sprite-corn-width (self resources-sprite-corn :getWidth))
+  (setq! resources-sprite-corn-height (self resources-sprite-corn :getHeight))
   (push! resources-quads-corn
          (love/graphics/new-quad 0 0 32 48 (self resources-sprite-corn :getDimensions))
          (love/graphics/new-quad 32 0 32 48 (self resources-sprite-corn :getDimensions))
          (love/graphics/new-quad 64 0 32 48 (self resources-sprite-corn :getDimensions))
          (love/graphics/new-quad 96 0 32 48 (self resources-sprite-corn :getDimensions)))
+
   (setq! resources-sprite-stump
-         (love/graphics/new-image "assets/sprite-stump.png")))
+         (love/graphics/new-image "assets/sprite-stump.png"))
+  (setq! resources-sprite-stump-width (self resources-sprite-stump :getWidth))
+  (setq! resources-sprite-stump-height (self resources-sprite-stump :getHeight)))
 
 (defun configure-packages ()
   (.<! love-repl/*love-repl* :screenshot true)
@@ -407,11 +447,11 @@
   (set-state-score! state 0))
 
 (defevent (gamestate-main :update) (dt)
-  (audio-queue-update)
+  (audio-queue-update!)
   (when (and (not (audio-queue-current)) (state-moving state))
         (progn
-         (audio-queue-push resources-music-intro)
-         (audio-queue-push resources-music-loop)))
+         (audio-queue-push! resources-music-intro)
+         (audio-queue-push! resources-music-loop)))
 
   (when (not (state-moving state))
         (set-state-start-time! state (love/timer/get-time)))
@@ -489,6 +529,13 @@
   (let* ([harvester-main (physics-harvester-main physics)]
          [pitch (+ 1 (/ (norm (vector (self harvester-main :getLinearVelocity))) 100))])
     (self resources-audio-engine :setPitch pitch))
+
+  (with (flying-corns-new (list))
+        (do ([flying-corn flying-corns])
+            (let ([frac (flying-corn-frac flying-corn (love/timer/get-time))])
+              (when (< frac 1)
+                    (push! flying-corns-new flying-corn))))
+        (setq! flying-corns flying-corns-new))
 
   (unless (elem? true (state-harvester-head-pieces state))
           (set-state-end-time! state (love/timer/get-time))))
