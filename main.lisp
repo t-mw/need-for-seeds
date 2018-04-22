@@ -94,6 +94,7 @@
                      (setq! (nth data i) (nth data i2))
                      (setq! (nth rand i) (nth rand i2)))))
     (for i (+ (field-max-idx) diff-tiles) (field-max-idx) 1
+         (setq! (nth data i) true)
          (setq! (nth rand i) (generate-field-rand))))
   (set-field-tile-offset-y! field y))
 
@@ -220,6 +221,13 @@
       (love/graphics/rectangle "fill"  x y field-width-world field-height-world))
 
     (love/graphics/set-color 255 255 255)
+
+    (do ([obstacle (physics-obstacles physics)])
+        (let* ([(x y) (position-from-body obstacle)]
+               [width (self resources-sprite-stump :getWidth)]
+               [height (self resources-sprite-stump :getHeight)])
+          (love/graphics/draw resources-sprite-stump x y c-rot 1 1 (/ width 2) (/ height 2))))
+
     (for i (field-max-idx) 1 -1
          (let* ([field (state-field state)]
                 [field-data (field-data field)]
@@ -287,6 +295,7 @@
 
 (define resources-sprite-corn :mutable nil)
 (define resources-quads-corn (list))
+(define resources-sprite-stump :mutable nil)
 
 (define resources-model-blades :mutable nil)
 (define resources-model-harvester :mutable nil)
@@ -316,7 +325,9 @@
          (love/graphics/new-quad 0 0 32 48 (self resources-sprite-corn :getDimensions))
          (love/graphics/new-quad 32 0 32 48 (self resources-sprite-corn :getDimensions))
          (love/graphics/new-quad 64 0 32 48 (self resources-sprite-corn :getDimensions))
-         (love/graphics/new-quad 96 0 32 48 (self resources-sprite-corn :getDimensions))))
+         (love/graphics/new-quad 96 0 32 48 (self resources-sprite-corn :getDimensions)))
+  (setq! resources-sprite-stump
+         (love/graphics/new-image "assets/sprite-stump.png")))
 
 (defun configure-packages ()
   (.<! love-repl/*love-repl* :screenshot true)
@@ -414,26 +425,41 @@
           (field-shift-y (state-field state) player-tile-y)))
 
   (let* ([obstacles (physics-obstacles physics)]
-         [obstacles-new (list)])
-    ;; delete obstacles that are out of view
+         [obstacles-new (list)]
+         [field (state-field state)]
+         [field-tile-offset-y (field-tile-offset-y field)])
     (for i 1 (n obstacles) 1
+         ;; delete obstacles that are out of view
          (let* ([obstacle (nth obstacles i)]
                 [(x y) (position-from-body obstacle)]
-                [(_ tile-y) (field-tile-from-world x y (field-tile-offset-y (state-field state)))])
+                [(tile-x tile-y) (field-tile-from-world x y field-tile-offset-y)])
            (if (>= tile-y 1)
                (push! obstacles-new obstacle)
-               (self obstacle :destroy))))
+               (self obstacle :destroy))
+           ;; clear surrounding field
+           (when (field-is-valid-tile tile-x tile-y)
+                 (let* ([idx (field-tile-to-1d-idx tile-x tile-y)]
+                        [idx1 (field-tile-to-1d-idx (+ tile-x 1) tile-y)]
+                        [idx2 (field-tile-to-1d-idx (- tile-x 1) tile-y)]
+                        [idx3 (field-tile-to-1d-idx tile-x (+ tile-y 1))]
+                        [idx4 (field-tile-to-1d-idx tile-x (- tile-y 1))])
+                   (setq! (nth (field-data field) idx) false)
+                   (setq! (nth (field-data field) idx1) false)
+                   (setq! (nth (field-data field) idx2) false)
+                   (setq! (nth (field-data field) idx3) false)
+                   (setq! (nth (field-data field) idx4) false)))))
     ;; generate new obstacles
     (for i 1 (- obstacle-count-max (n obstacles-new)) 1
          (let* ([radius 20]
-                [pos-x (+ radius (* (random) (- field-width-world (* 2 radius))))]
+                [x (+ radius (* (random) (- field-width-world (* 2 radius))))]
                 [(_ player-y) (physics-player-position physics)]
                 ;; generate new obstacles out of view
-                [pos-y (+ player-y field-height-world (* (random) field-height-world))]
-                [obstacle (self (physics-world physics) :newCircleCollider pos-x pos-y radius)])
+                [y (+ player-y field-height-world (* (random) field-height-world))]
+                [obstacle (self (physics-world physics) :newCircleCollider x y radius)])
            (self obstacle :setType "static")
            (self obstacle :setCollisionClass "Obstacle")
            (push! obstacles-new obstacle)))
+
     (set-physics-obstacles! physics obstacles-new))
 
   (self (physics-world physics) :update dt)
