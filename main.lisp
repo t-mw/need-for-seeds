@@ -558,11 +558,12 @@
         (handle-harvester-collisions))
 
   (let ([up (love/keyboard/is-down "up")]
+        [down (love/keyboard/is-down "down")]
         [left (love/keyboard/is-down "left")]
         [right (love/keyboard/is-down "right")])
-    (when up
+    (when (or up down)
           (let* ([angle (self (physics-harvester-main physics) :getAngle)]
-                 [v (* 1000 (rotate (vector 0 1) angle))]
+                 [v (* (if up 1000 -1000) (rotate (vector 0 1) angle))]
                  [harvester-main (physics-harvester-main physics)])
             (self harvester-main :applyForce (vector-item v 1) (vector-item v 2))))
     (when left
