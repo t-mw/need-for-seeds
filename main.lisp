@@ -610,6 +610,7 @@
 
 (defevent (gamestate-end :enter) ()
   (love/audio/stop)
+  (love/audio/play resources-audio-hurt)
   (love/audio/play resources-audio-victory)
   (setq! flying-corns (list)))
 
