@@ -441,15 +441,17 @@
          [harvester-main
           (with (main (self world :newRectangleCollider (- start-x 40) (+ start-y 0) 70 80))
                 (self main :setAngularDamping 0.5)
-                (self main :setLinearDamping 0.7)
+                (self main :setLinearDamping 0.5)
+                (self main :setMass 15)
                 main)]
          [origin-x (- start-x (/ harvester-head-width 2))]
          [origin-y (+ start-y 100)]
          [harvester-head-pieces
           (dolist ([pos harvester-head-positions])
                   (with (piece (self world :newRectangleCollider (+ origin-x pos) origin-y harvester-head-piece-width harvester-head-piece-width))
-                        (self piece :setAngularDamping 0.5)
-                        (self piece :setLinearDamping 0.5)
+                        (self piece :setAngularDamping 0.7)
+                        (self piece :setLinearDamping 0.7)
+                        (self piece :setMass 0.1)
                         (self piece :setCollisionClass "Head")
                         piece))]
          [walls (dolist
@@ -573,7 +575,7 @@
     (when (or up left right)
           (set-state-moving! state true)))
   (let* ([harvester-main (physics-harvester-main physics)]
-         [pitch (+ 1 (/ (norm (vector (self harvester-main :getLinearVelocity))) 100))])
+         [pitch (+ 1 (/ (norm (vector (self harvester-main :getLinearVelocity))) 75))])
     (self resources-audio-engine :setPitch pitch))
 
   (with (flying-corns-new (list))
