@@ -49,7 +49,7 @@
   (dolist ([i (range :from 0 :to (- harvester-head-piece-count 1))])
           (* i harvester-head-width harvester-head-piece-fraction)))
 
-(define obstacle-count-max 5)
+(define obstacle-count-max 10)
 
 (define start-x (/ field-width-world 2))
 (define start-y 100)
@@ -127,7 +127,11 @@
           (mutable moving)
           (mutable start-time)
           (mutable end-time)
-          (mutable score)))
+          (mutable score)
+          (mutable sample-speed)
+          (mutable sample-count)))
+(defun state-avg-speed (state)
+  (/ (state-sample-speed state) (state-sample-count state)))
 (define state (make-state))
 
 (define audio-queue (list))
@@ -170,6 +174,9 @@
 
 (defun physics-player-position (physics)
   (position-from-body (physics-harvester-main physics)))
+
+(defun physics-fake-speed (physics)
+  (/ (norm (vector (self (physics-harvester-main physics) :getLinearVelocity))) 8))
 
 (defun camera-position (player-x player-y)
   (values-list player-x (+ player-y 200)))
@@ -273,8 +280,6 @@
                  [y (floor (+ (vector-item pos 2) (* distance (sin dir)) height))])
             (love/graphics/draw resources-sprite-corn quad x y dir 1 1 (/ resources-sprite-corn-width 2) (/ resources-sprite-corn-height 2))))
 
-      (self (physics-world physics) :draw)
-
       (love/graphics/set-color 0 0 0 20)
       (love/graphics/polygon "fill" (self (physics-harvester-main physics) :getWorldPoints (self (physics-harvester-main physics) :getPoints)))
 
@@ -312,6 +317,10 @@
 
       (love/graphics/pop))))
 
+(defun win-message (score)
+  (cond
+   [true "that's kind of fast"]))
+
 (define gamestate-start {})
 (define gamestate-main {})
 (define gamestate-end {})
@@ -319,6 +328,7 @@
 
 (define resources-audio-hurt :mutable nil)
 (define resources-audio-engine :mutable nil)
+(define resources-audio-victory :mutable nil)
 
 (define resources-music-intro :mutable nil)
 (define resources-music-loop :mutable nil)
@@ -345,6 +355,8 @@
   (self resources-audio-engine :setVolume 0.2)
   (setq! resources-audio-hurt
          (love/audio/new-source "assets/audio-hurt.wav" "static"))
+  (setq! resources-audio-victory
+         (love/audio/new-source "assets/audio-victory.ogg" "stream"))
 
   (setq! resources-music-intro
          (love/audio/new-source "assets/music-intro.ogg" "stream"))
@@ -452,7 +464,9 @@
   (set-state-moving! state false)
   (set-state-start-time! state 0)
   (set-state-end-time! state 0)
-  (set-state-score! state 0))
+  (set-state-score! state 0)
+  (set-state-sample-speed! state 0)
+  (set-state-sample-count! state 0))
 
 (defevent (gamestate-main :update) (dt)
   (audio-queue-update!)
@@ -463,6 +477,11 @@
 
   (when (not (state-moving state))
         (set-state-start-time! state (love/timer/get-time)))
+
+  (when (state-moving state)
+        (with (speed (physics-fake-speed physics))
+              (set-state-sample-speed! state (+ (state-sample-speed state) speed))
+              (set-state-sample-count! state (+ (state-sample-count state) 1))))
 
   ;; shift field for infinite scrolling
   (let* ([(x y) (physics-player-position physics)]
@@ -552,12 +571,13 @@
   (world-draw)
 
   (love/graphics/set-color 255 255 255)
-  (let ([width (love/graphics/get-width)]
-        [height (love/graphics/get-height)])
+  (let* ([width (love/graphics/get-width)]
+         [height (love/graphics/get-height)]
+         [speed (floor (physics-fake-speed physics))])
     (if (state-moving state)
         (progn
          (love/graphics/set-font resources-font-small)
-         (love/graphics/print (seconds-to-clock (- (love/timer/get-time) (state-start-time state))) 20 10)
+         (love/graphics/print (concat (list speed " mph")) 20 10)
          (love/graphics/print (concat (list "seeds: " (state-score state))) 20 50))
         (progn
          (love/graphics/set-font resources-font-small)
@@ -569,6 +589,11 @@
   (when (> (state-end-time state) 0)
         (hump/gamestate/switch gamestate-end)))
 
+(defevent (gamestate-end :enter) ()
+  (love/audio/stop)
+  (love/audio/play resources-audio-victory)
+  (setq! flying-corns (list)))
+
 (defevent (gamestate-end :keypressed) (key code)
   (case key
     ["space" (hump/gamestate/switch gamestate-main)]
@@ -577,9 +602,19 @@
 (defevent (gamestate-end :draw) ()
   (world-draw)
 
-  (love/graphics/set-color 255 255 255)
-  (love/graphics/print (seconds-to-clock (- (state-end-time state) (state-start-time state) 0 0)))
-  (love/graphics/print (state-score state) 0 20))
+  (let ([width (love/graphics/get-width)]
+        [height (love/graphics/get-height)])
+    (love/graphics/set-font resources-font-small)
+    (love/graphics/printf "wow!" (- (/ width 2) 300) (- (/ height 2) 250) 600 "center")
+    (love/graphics/set-font resources-font-large)
+    (love/graphics/printf (concat (list (state-score state) " seeds!")) (- (/ width 2) 300) (- (/ height 2) 220) 600 "center")
+    (love/graphics/set-font resources-font-small)
+    (love/graphics/printf "and an average speed of" (- (/ width 2) 300) (- (/ height 2) 100) 600 "center")
+    (love/graphics/set-font resources-font-large)
+    (love/graphics/printf (concat (list (floor (state-avg-speed state)) " mph!")) (- (/ width 2) 300) (- (/ height 2) 70) 600 "center")
+    (love/graphics/set-font resources-font-small)
+    (love/graphics/printf (win-message (state-score state)) (- (/ width 2) 300) (- height 210) 600 "center")
+    (love/graphics/printf "space to restart" (- (/ width 2) 300) (- height 100) 600 "center")))
 
 (defevent (gamestate-repl :wheelmoved) (x y)
   (love-repl/wheelmoved x y))
