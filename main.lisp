@@ -516,17 +516,21 @@
                (push! obstacles-new obstacle)
                (self obstacle :destroy))
            ;; clear surrounding field
-           (when (field-is-valid-tile tile-x tile-y)
-                 (let* ([idx (field-tile-to-1d-idx tile-x tile-y)]
-                        [idx1 (field-tile-to-1d-idx (+ tile-x 1) tile-y)]
-                        [idx2 (field-tile-to-1d-idx (- tile-x 1) tile-y)]
-                        [idx3 (field-tile-to-1d-idx tile-x (+ tile-y 1))]
-                        [idx4 (field-tile-to-1d-idx tile-x (- tile-y 1))])
-                   (setq! (nth (field-data field) idx) false)
-                   (setq! (nth (field-data field) idx1) false)
-                   (setq! (nth (field-data field) idx2) false)
-                   (setq! (nth (field-data field) idx3) false)
-                   (setq! (nth (field-data field) idx4) false)))))
+           (let ([update-field (lambda (dx dy)
+                                 (let* ([x2 (+ tile-x dx)]
+                                        [y2 (+ tile-y dy)]
+                                        [idx (field-tile-to-1d-idx x2 y2)])
+                                   (when (field-is-valid-tile x2 y2)
+                                         (setq! (nth (field-data field) idx) false))))])
+             (update-field 0 0)
+             (update-field 1 0)
+             (update-field 1 -1)
+             (update-field 0 -1)
+             (update-field -1 -1)
+             (update-field -1 0)
+             (update-field -1 1)
+             (update-field 0 1)
+             (update-field 1 1))))
     ;; generate new obstacles
     (for i 1 (- obstacle-count-max (n obstacles-new)) 1
          (let* ([radius 15]
