@@ -435,6 +435,7 @@
   (let* ([world (with (world (windfield/new-world 0 0 true))
                       (self world :addCollisionClass "Head")
                       (self world :addCollisionClass "Obstacle")
+                      (self world :addCollisionClass "Wall" { :ignores { 1 "Head" } })
                       (self world :addCollisionClass "Ghost" { :ignores { 1 "Head" 2 "Obstacle"} })
                       world)]
          [harvester-main
@@ -456,6 +457,7 @@
                          (self world :newRectangleCollider field-width-world 0 100 999999999)
                          (self world :newRectangleCollider -100 0 100 999999999)
                          (self world :newRectangleCollider 0 -100 field-width-world 100))])
+                 (self wall :setCollisionClass "Wall")
                  (self wall :setType "static")
                  wall)])
     (set-physics-world! physics world)
