@@ -243,9 +243,14 @@
     (love/graphics/rotate c-rot)
     (love/graphics/translate (* -1 c-x) (* -1 c-y))
 
+    (love/graphics/clear 100 100 100)
+
     (love/graphics/set-color 217 160 102)
-    (let* ([(x y) (field-tile-to-world 1 1 (field-tile-offset-y (state-field state)))])
-      (love/graphics/rectangle "fill"  x y field-width-world field-height-world))
+    (love/graphics/rectangle "fill" 0 0 field-width-world 999999999)
+
+    (love/graphics/set-color 190 140 90)
+    (love/graphics/rectangle "fill" -10 0 10 999999999)
+    (love/graphics/rectangle "fill" field-width-world 0 10 999999999)
 
     (love/graphics/set-color 255 255 255)
 
