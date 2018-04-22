@@ -49,7 +49,7 @@
 (define obstacle-count-max 5)
 
 (define start-x (/ field-width-world 2))
-(define start-y 20)
+(define start-y 100)
 (define player-origin-tile-y 10)
 
 (defun to-1d-idx (x y sx)
@@ -133,6 +133,9 @@
 (defun physics-player-position (physics)
   (position-from-body (physics-harvester-main physics)))
 
+(defun camera-position (player-x player-y)
+  (values-list player-x (+ player-y 200)))
+
 (define gamestate-start {})
 (define gamestate-main {})
 (define gamestate-repl {})
@@ -186,7 +189,7 @@
   (love/audio/stop)
   (love/audio/play resources-audio-engine)
 
-  (with (camera (hump/camera/new start-x start-y))
+  (with (camera (hump/camera/new (camera-position start-x (+ start-y 80))))
         (set-state-camera! state camera)
         (self camera :rotate pi)
         (.<! camera :smoother (hump/camera/smooth-damped 5)))
@@ -258,12 +261,11 @@
     (set-physics-obstacles! physics obstacles-new))
 
   (self (physics-world physics) :update dt)
-  (let* ([(x y) (physics-player-position physics)]
-         [camera (state-camera state)]
+  (let* ([camera (state-camera state)]
          ;; place player at bottom of screen
-         [new-y (+ y 200)])
+         [(new-x new-y) (camera-position (physics-player-position physics))])
     (when (> new-y (.> camera :y))
-          (self camera :lockPosition x (+ y 200))))
+          (self camera :lockPosition new-x new-y)))
   (let ([pieces (physics-harvester-head-pieces physics)]
         [piece-states (state-harvester-head-pieces state)]
         [field-data (field-data (state-field state))]
