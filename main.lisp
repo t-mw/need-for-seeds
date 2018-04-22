@@ -50,7 +50,7 @@
 
 (define start-x (/ field-width-world 2))
 (define start-y 20)
-(define player-origin-tile-y (/ field-height-tiles 2))
+(define player-origin-tile-y 10)
 
 (defun to-1d-idx (x y sx)
   (+ (- x 1) (* sx (- y 1)) 1))
@@ -230,8 +230,10 @@
   ;; shift field for infinite scrolling
   (let* ([(x y) (physics-player-position physics)]
          [field (state-field state)]
+         [field-tile-offset-y (field-tile-offset-y field)]
          [(_ player-tile-y) (field-tile-from-world x y player-origin-tile-y)])
-    (field-shift-y (state-field state) player-tile-y))
+    (when (> player-tile-y field-tile-offset-y)
+          (field-shift-y (state-field state) player-tile-y)))
 
   (let* ([obstacles (physics-obstacles physics)]
          [obstacles-new (list)])
@@ -257,8 +259,11 @@
 
   (self (physics-world physics) :update dt)
   (let* ([(x y) (physics-player-position physics)]
-        [camera (state-camera state)])
-    (self camera :lockPosition x y))
+         [camera (state-camera state)]
+         ;; place player at bottom of screen
+         [new-y (+ y 200)])
+    (when (> new-y (.> camera :y))
+          (self camera :lockPosition x (+ y 200))))
   (let ([pieces (physics-harvester-head-pieces physics)]
         [piece-states (state-harvester-head-pieces state)]
         [field-data (field-data (state-field state))]
