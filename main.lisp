@@ -243,7 +243,7 @@
     (love/graphics/rotate c-rot)
     (love/graphics/translate (* -1 c-x) (* -1 c-y))
 
-    (love/graphics/clear 100 100 100)
+    (love/graphics/clear 200 150 100)
 
     (love/graphics/set-color 217 160 102)
     (love/graphics/rectangle "fill" 0 0 field-width-world 999999999)
