@@ -437,12 +437,18 @@
                       (self world :addCollisionClass "Obstacle")
                       (self world :addCollisionClass "Ghost" { :ignores { 1 "Head" 2 "Obstacle"} })
                       world)]
-         [harvester-main (self world :newRectangleCollider (- start-x 40) (+ start-y 0) 70 80)]
+         [harvester-main
+          (with (main (self world :newRectangleCollider (- start-x 40) (+ start-y 0) 70 80))
+                (self main :setAngularDamping 0.5)
+                (self main :setLinearDamping 0.7)
+                main)]
          [origin-x (- start-x (/ harvester-head-width 2))]
          [origin-y (+ start-y 100)]
          [harvester-head-pieces
           (dolist ([pos harvester-head-positions])
                   (with (piece (self world :newRectangleCollider (+ origin-x pos) origin-y harvester-head-piece-width harvester-head-piece-width))
+                        (self piece :setAngularDamping 0.5)
+                        (self piece :setLinearDamping 0.5)
                         (self piece :setCollisionClass "Head")
                         piece))]
          [walls (dolist
@@ -457,7 +463,6 @@
     (set-physics-harvester-head-pieces! physics harvester-head-pieces)
     (set-physics-obstacles! physics (list))
     (set-physics-walls! physics walls)
-    (self harvester-main :setLinearDamping 0.5)
     (for i 1 harvester-head-piece-count 1
          (let* ([piece (nth harvester-head-pieces i)]
                 [joint (self world :addJoint "RevoluteJoint" piece harvester-main start-x (+ start-y 80) true)])
@@ -555,9 +560,9 @@
                  [harvester-main (physics-harvester-main physics)])
             (self harvester-main :applyForce (vector-item v 1) (vector-item v 2))))
     (when left
-          (self (physics-harvester-main physics) :applyAngularImpulse -1000))
+          (self (physics-harvester-main physics) :applyTorque -50000))
     (when right
-          (self (physics-harvester-main physics) :applyAngularImpulse 1000))
+          (self (physics-harvester-main physics) :applyTorque 50000))
     (when (or up left right)
           (set-state-moving! state true)))
   (let* ([harvester-main (physics-harvester-main physics)]
