@@ -335,6 +335,9 @@
 (define resources-model-blades :mutable nil)
 (define resources-model-harvester :mutable nil)
 
+(define resources-font-small :mutable nil)
+(define resources-font-large :mutable nil)
+
 (defun load-resources ()
   (setq! resources-audio-engine
          (love/audio/new-source "assets/audio-engine.wav" "static"))
@@ -367,7 +370,12 @@
   (setq! resources-sprite-stump
          (love/graphics/new-image "assets/sprite-stump.png"))
   (setq! resources-sprite-stump-width (self resources-sprite-stump :getWidth))
-  (setq! resources-sprite-stump-height (self resources-sprite-stump :getHeight)))
+  (setq! resources-sprite-stump-height (self resources-sprite-stump :getHeight))
+
+  (setq! resources-font-small
+         (love/graphics/new-font "assets/font-polanwritings.otf" 40))
+  (setq! resources-font-large
+         (love/graphics/new-font "assets/font-polanwritings.otf" 100)))
 
 (defun configure-packages ()
   (.<! love-repl/*love-repl* :screenshot true)
@@ -544,8 +552,18 @@
   (world-draw)
 
   (love/graphics/set-color 255 255 255)
-  (love/graphics/print (seconds-to-clock (- (love/timer/get-time) (state-start-time state) 0 0)))
-  (love/graphics/print (state-score state) 0 20)
+  (let ([width (love/graphics/get-width)]
+        [height (love/graphics/get-height)])
+    (if (state-moving state)
+        (progn
+         (love/graphics/set-font resources-font-small)
+         (love/graphics/print (seconds-to-clock (- (love/timer/get-time) (state-start-time state))) 20 10)
+         (love/graphics/print (concat (list "seeds: " (state-score state))) 20 50))
+        (progn
+         (love/graphics/set-font resources-font-small)
+         (love/graphics/printf "you can smell it in the breeze,\nhear it rustling in the trees,\nan impulse building in your knees,\nto satisfy your" (- (/ width 2) 300) (- (/ height 2) 250) 600 "center")
+         (love/graphics/set-font resources-font-large)
+         (love/graphics/printf "Need for Seeds" (- (/ width 2) 300) (- (/ height 2) 40) 600 "center"))))
 
   ;; switching state in 'update' causes gamestate drawing to be skipped for one frame
   (when (> (state-end-time state) 0)
