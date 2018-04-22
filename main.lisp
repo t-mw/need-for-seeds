@@ -34,7 +34,7 @@
 
 (define field-tile-size 30)
 (define field-width-tiles 20)
-(define field-height-tiles 200)
+(define field-height-tiles 30)
 (define field-width-world (* field-width-tiles field-tile-size))
 (define field-height-world (* field-height-tiles field-tile-size))
 
@@ -48,6 +48,7 @@
 
 (define start-x (/ field-width-world 2))
 (define start-y 20)
+(define player-origin-tile-y (/ field-height-tiles 2))
 
 (defun to-1d-idx (x y sx)
   (+ (- x 1) (* sx (- y 1)) 1))
@@ -61,17 +62,30 @@
 (defun field-max-idx ()
   (* field-width-tiles field-height-tiles))
 
-(defun make-field ()
-  (let ([result (list)])
+(defstruct field
+  (fields (mutable data)
+          (mutable tile-offset-y)))
+
+(defun create-field ()
+  (let ([data (list)])
     (for _ 1 (field-max-idx) 1
-         (push! result true))
-    result))
+         (push! data true))
+    (make-field data 0)))
 
-(defun field-tile-from-world (x y)
-  (values-list (floor (/ x field-tile-size)) (floor (/ y field-tile-size))))
+(defun field-shift-y (field y)
+  (let ([data (field-data field)]
+        [diff-y (- (field-tile-offset-y field) y)])
+        (for i 1 (field-max-idx) 1
+             (with (i2 (- i (* field-width-tiles diff-y)))
+                   (when (and (>= i2 1) (<= i2 (field-max-idx)))
+                         (setq! (nth data i) (nth data i2))))))
+  (set-field-tile-offset-y! field y))
 
-(defun field-tile-to-world (x y)
-  (values-list (* x field-tile-size) (* y field-tile-size)))
+(defun field-tile-from-world (x y tile-offset-y)
+  (values-list (floor (/ x field-tile-size)) (- (floor (/ y field-tile-size)) tile-offset-y)))
+
+(defun field-tile-to-world (x y tile-offset-y)
+  (values-list (* x field-tile-size) (* (+ y tile-offset-y) field-tile-size)))
 
 (defun field-tile-to-1d-idx (tile-x tile-y)
   (to-1d-idx tile-x tile-y field-width-tiles))
@@ -110,6 +124,9 @@
           (mutable harvester-head-pieces)
           (mutable obstacles)))
 (define physics (make-physics))
+
+(defun physics-player-position (physics)
+  (self (physics-harvester-main physics) :getPosition))
 
 (define gamestate-start {})
 (define gamestate-main {})
@@ -182,7 +199,7 @@
                         (self piece :setCollisionClass "Head")
                         piece))]
          [obstacles
-          (dolist ([i (range :from 1 :to 40)])
+          (dolist ([i (range :from 1 :to 1)])
                   (let* ([pos-x (* (random) field-width-world)]
                          [pos-y (+ (* 10 start-y) (* (random) (- field-height-world (* 10 start-y))))]
                          [obstacle (self world :newCircleCollider pos-x pos-y 20)])
@@ -203,7 +220,7 @@
                              [pos (nth harvester-head-positions next-i)])
                          (self world :addJoint "WeldJoint" piece next-piece (+ origin-x pos) origin-y)))))))
   (set-state-harvester-head-pieces! state (map (lambda () true) (physics-harvester-head-pieces physics)))
-  (set-state-field! state (make-field))
+  (set-state-field! state (create-field))
   (set-state-moving! state false))
 
 (defevent (gamestate-main :update) (dt)
@@ -213,12 +230,20 @@
          (audio-queue-push resources-music-intro)
          (audio-queue-push resources-music-loop)))
 
+  ;; shift field for infinite scrolling
+  (let* ([(x y) (physics-player-position physics)]
+         [field (state-field state)]
+         [(_ player-tile-y) (field-tile-from-world x y player-origin-tile-y)])
+    (field-shift-y (state-field state) player-tile-y))
+
   (self (physics-world physics) :update dt)
-  (let* ([(x y) (self (physics-harvester-main physics) :getPosition)]
+  (let* ([(x y) (physics-player-position physics)]
         [camera (state-camera state)])
     (self camera :lockPosition x y))
   (let ([pieces (physics-harvester-head-pieces physics)]
         [piece-states (state-harvester-head-pieces state)]
+        [field-data (field-data (state-field state))]
+        [field-tile-offset-y (field-tile-offset-y (state-field state))]
         [to-destroy (list)])
     (for i 1 (n pieces) 1
          (let ([piece (nth pieces i)]
@@ -227,10 +252,10 @@
                  (if (self piece :enter "Obstacle")
                      (push! to-destroy i)
                      (let* ([(x y) (self piece :getPosition)]
-                            [(tile-x tile-y) (field-tile-from-world x y)]
+                            [(tile-x tile-y) (field-tile-from-world x y field-tile-offset-y)]
                             [idx (field-tile-to-1d-idx tile-x tile-y)])
-                       (when (and (field-is-valid-tile tile-x tile-y) (nth (state-field state) idx))
-                             (setq! (nth (state-field state) idx) false)))))))
+                       (when (and (field-is-valid-tile tile-x tile-y) (nth field-data idx))
+                             (setq! (nth field-data idx) false)))))))
 
     (let ([destroy-piece (lambda (i)
                            (with (piece (nth pieces i))
@@ -272,7 +297,6 @@
     (self resources-audio-engine :setPitch pitch)))
 
 (defevent (gamestate-main :draw) ()
-  (setq! (nth (state-field state) 20) false)
   (let ([width (love/graphics/get-width)]
         [height (love/graphics/get-height)]
         [camera (state-camera state)])
@@ -282,8 +306,12 @@
     (love/graphics/line 0 0 10 10)
     (love/graphics/set-color 50 100 50)
     (for i 1 (field-max-idx) 1
-         (let* ([v (nth (state-field state) i)]
-                [(x y) (field-tile-to-world (field-tile-from-1d-idx i))])
+         (let* ([field (state-field state)]
+                [field-data (field-data field)]
+                [field-tile-offset-y (field-tile-offset-y field)]
+                [(tile-x tile-y) (field-tile-from-1d-idx i)]
+                [v (nth field-data i)]
+                [(x y) (field-tile-to-world tile-x tile-y field-tile-offset-y)])
            (if v
                (love/graphics/rectangle "fill" x y field-tile-size field-tile-size)
                (love/graphics/rectangle "line" x y field-tile-size field-tile-size))))
