@@ -240,10 +240,6 @@
     (love/graphics/set-color 255 255 255)
     (love/graphics/push)
     (love/graphics/scale -1 -1)
-    (with (angle (self (physics-harvester-main physics) :getAngle))
-          (.<! resources-model-harvester :rotation (deg angle)))
-    (with ((x y) (physics-player-position physics))
-          (self resources-model-harvester :drawModel (- 0 x) (- 0 y)))
 
     (let* ([pieces (physics-harvester-head-pieces physics)]
            [piece-states (state-harvester-head-pieces state)])
@@ -257,6 +253,12 @@
              (.<! resources-model-blades :flip (and piece-state flip))
              (with ((x y) (position-from-body piece))
                    (self resources-model-blades :drawModel (- 0 x) (- 0 y))))))
+
+    (with (angle (self (physics-harvester-main physics) :getAngle))
+          (.<! resources-model-harvester :rotation (deg angle)))
+    (with ((x y) (physics-player-position physics))
+          (self resources-model-harvester :drawModel (- 0 x) (- 0 y)))
+
     (love/graphics/pop)
 
     ;; draw physics centers
