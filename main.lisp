@@ -7,6 +7,7 @@
 (import lua/basic (mod))
 (import lua/math (cos sin pi floor random randomseed))
 (import lua/os)
+(import lua/string)
 (import love/audio)
 (import love/graphics)
 (import love/keyboard)
@@ -98,12 +99,19 @@
 (defun field-is-valid-tile (x y)
   (and (>= x 1) (<= x field-width-tiles) (>= y 1) (<= y field-height-tiles)))
 
+(defun seconds-to-clock (s)
+  (let* ([m (floor (/ s 60))]
+         [ms (* 100 (- s (floor s)))]
+         [s (floor (- s (* m 60)))])
+    (concat (list (lua/string/format "%02.f" m) ":" (lua/string/format "%02.f" s) ":" (lua/string/format "%02.f" ms)))))
+
 (defstruct state
   (fields (mutable pos)
           (mutable camera)
           (mutable harvester-head-pieces)
           (mutable field)
-          (mutable moving)))
+          (mutable moving)
+          (mutable start-time)))
 (define state (make-state))
 
 (define audio-queue (list))
@@ -221,7 +229,8 @@
                          (self world :addJoint "WeldJoint" piece next-piece (+ origin-x pos) origin-y)))))))
   (set-state-harvester-head-pieces! state (map (lambda () true) (physics-harvester-head-pieces physics)))
   (set-state-field! state (create-field))
-  (set-state-moving! state false))
+  (set-state-moving! state false)
+  (set-state-start-time! state 0))
 
 (defevent (gamestate-main :update) (dt)
   (audio-queue-update)
@@ -229,6 +238,9 @@
         (progn
          (audio-queue-push resources-music-intro)
          (audio-queue-push resources-music-loop)))
+
+  (when (not (state-moving state))
+        (set-state-start-time! state (love/timer/get-time)))
 
   ;; shift field for infinite scrolling
   (let* ([(x y) (physics-player-position physics)]
@@ -343,7 +355,10 @@
                (love/graphics/rectangle "line" x y field-tile-size field-tile-size))))
     (self (physics-world physics) :draw)
     (self camera :detach)
-    (love/graphics/origin)))
+    (love/graphics/origin)
+
+    (love/graphics/set-color 255 255 255)
+    (love/graphics/print (seconds-to-clock (- (love/timer/get-time) (state-start-time state) 0 0)))))
 
 (defevent (gamestate-main :keypressed) (key code)
   (case key
