@@ -35,7 +35,7 @@
 (defun to-vector (s)
   (vector (.> s :x) (.> s :y)))
 
-(define field-tile-size 30)
+(define field-tile-size 32)
 (define field-width-tiles 20)
 (define field-height-tiles 30)
 (define field-width-world (* field-width-tiles field-tile-size))
@@ -69,21 +69,32 @@
 
 (defstruct field
   (fields (mutable data)
+          (mutable rand)
           (mutable tile-offset-y)))
 
+(defun generate-field-rand ()
+  (floor (* (random) 1000)))
+
 (defun create-field ()
-  (let ([data (list)])
+  (let ([data (list)]
+        [rand (list)])
     (for _ 1 (field-max-idx) 1
-         (push! data true))
-    (make-field data 0)))
+         (push! data true)
+         (push! rand (generate-field-rand)))
+    (make-field data rand 0)))
 
 (defun field-shift-y (field y)
-  (let ([data (field-data field)]
-        [diff-y (- (field-tile-offset-y field) y)])
-        (for i 1 (field-max-idx) 1
-             (with (i2 (- i (* field-width-tiles diff-y)))
-                   (when (and (>= i2 1) (<= i2 (field-max-idx)))
-                         (setq! (nth data i) (nth data i2))))))
+  (let* ([data (field-data field)]
+         [rand (field-rand field)]
+         [diff-y (- (field-tile-offset-y field) y)]
+         [diff-tiles (* field-width-tiles diff-y)])
+    (for i 1 (field-max-idx) 1
+         (with (i2 (- i diff-tiles))
+               (when (and (>= i2 1) (<= i2 (field-max-idx)))
+                     (setq! (nth data i) (nth data i2))
+                     (setq! (nth rand i) (nth rand i2)))))
+    (for i (+ (field-max-idx) diff-tiles) (field-max-idx) 1
+         (setq! (nth rand i) (generate-field-rand))))
   (set-field-tile-offset-y! field y))
 
 (defun field-tile-from-world (x y tile-offset-y)
@@ -190,24 +201,40 @@
                        (destroy-piece i)))))))
 
 (defun world-draw ()
-  (let ([width (love/graphics/get-width)]
-        [height (love/graphics/get-height)]
-        [camera (state-camera state)])
-    ;; (0 0) is at bottom-middle of screen.
-    ;; x +ve is right, y +ve is up.
-    (self camera :attach)
-    (love/graphics/line 0 0 10 10)
-    (love/graphics/set-color 50 100 50)
-    (for i 1 (field-max-idx) 1
+  (let* ([width (love/graphics/get-width)]
+         [height (love/graphics/get-height)]
+         [camera (state-camera state)]
+         [c-x (floor (.> camera :x))]
+         [c-y (floor (.> camera :y))]
+         [c-rot (.> camera :rot)])
+
+    (love/graphics/set-scissor 0 0 width height)
+    (love/graphics/push)
+    (love/graphics/translate (/ width 2) (/ height 2))
+    (love/graphics/scale (.> camera :scale))
+    (love/graphics/rotate c-rot)
+    (love/graphics/translate (* -1 c-x) (* -1 c-y))
+
+    (love/graphics/set-color 217 160 102)
+    (let* ([(x y) (field-tile-to-world 1 1 (field-tile-offset-y (state-field state)))])
+      (love/graphics/rectangle "fill"  x y field-width-world field-height-world))
+
+    (love/graphics/set-color 255 255 255)
+    (for i (field-max-idx) 1 -1
          (let* ([field (state-field state)]
                 [field-data (field-data field)]
+                [field-rand (field-rand field)]
                 [field-tile-offset-y (field-tile-offset-y field)]
                 [(tile-x tile-y) (field-tile-from-1d-idx i)]
-                [v (nth field-data i)]
-                [(x y) (field-tile-to-world tile-x tile-y field-tile-offset-y)])
-           (if v
-               (love/graphics/rectangle "fill" x y field-tile-size field-tile-size)
-               (love/graphics/rectangle "line" x y field-tile-size field-tile-size))))
+                [filled (nth field-data i)]
+                [rand (nth field-rand i)]
+                [quad-count (n resources-quads-corn)]
+                [(x y) (field-tile-to-world (+ tile-x 1) (+ tile-y 1) field-tile-offset-y)])
+           (when filled
+                 (with (quad (nth resources-quads-corn (+ (mod (+ rand 1) quad-count) 1)))
+                       (love/graphics/draw resources-sprite-corn quad x y c-rot))
+                 (with (quad (nth resources-quads-corn (+ (mod (+ rand 4) quad-count) 1)))
+                       (love/graphics/draw resources-sprite-corn quad x y c-rot)))))
     (self (physics-world physics) :draw)
 
     (love/graphics/set-color 255 255 255)
@@ -239,8 +266,7 @@
     ;;       (love/graphics/circle "fill" x y 5)))
     ;; (love/graphics/line 0 200 field-width-world 200)
 
-    (self camera :detach)
-    (love/graphics/origin)))
+    (love/graphics/pop)))
 
 (define gamestate-start {})
 (define gamestate-main {})
@@ -253,8 +279,11 @@
 (define resources-music-intro :mutable nil)
 (define resources-music-loop :mutable nil)
 
-(define resources-model-blades (model-viewer/new (love/filesystem/new-file "assets/sprite-blades.png")))
-(define resources-model-harvester (model-viewer/new (love/filesystem/new-file "assets/sprite-harvester.png") true))
+(define resources-sprite-corn :mutable nil)
+(define resources-quads-corn (list))
+
+(define resources-model-blades :mutable nil)
+(define resources-model-harvester :mutable nil)
 
 (defun load-resources ()
   (setq! resources-audio-engine
@@ -268,7 +297,20 @@
          (love/audio/new-source "assets/music-intro.ogg" "stream"))
   (setq! resources-music-loop
          (love/audio/new-source "assets/music-loop.ogg" "stream"))
-  (self resources-music-loop :setLooping true))
+  (self resources-music-loop :setLooping true)
+
+  (setq! resources-model-blades
+         (model-viewer/new (love/filesystem/new-file "assets/sprite-blades.png")))
+  (setq! resources-model-harvester
+         (model-viewer/new (love/filesystem/new-file "assets/sprite-harvester.png") true))
+
+  (setq! resources-sprite-corn
+         (love/graphics/new-image "assets/sprite-corn.png"))
+  (push! resources-quads-corn
+         (love/graphics/new-quad 0 0 32 48 (self resources-sprite-corn :getDimensions))
+         (love/graphics/new-quad 32 0 32 48 (self resources-sprite-corn :getDimensions))
+         (love/graphics/new-quad 64 0 32 48 (self resources-sprite-corn :getDimensions))
+         (love/graphics/new-quad 96 0 32 48 (self resources-sprite-corn :getDimensions))))
 
 (defun configure-packages ()
   (.<! love-repl/*love-repl* :screenshot true)
