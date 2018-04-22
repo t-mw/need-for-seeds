@@ -490,7 +490,7 @@
                    (setq! (nth (field-data field) idx4) false)))))
     ;; generate new obstacles
     (for i 1 (- obstacle-count-max (n obstacles-new)) 1
-         (let* ([radius 20]
+         (let* ([radius 15]
                 [x (+ radius (* (random) (- field-width-world (* 2 radius))))]
                 [(_ player-y) (physics-player-position physics)]
                 ;; generate new obstacles out of view
