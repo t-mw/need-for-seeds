@@ -46,6 +46,8 @@
   (dolist ([i (range :from 0 :to (- harvester-head-piece-count 1))])
           (* i harvester-head-width harvester-head-piece-fraction)))
 
+(define obstacle-count-max 5)
+
 (define start-x (/ field-width-world 2))
 (define start-y 20)
 (define player-origin-tile-y (/ field-height-tiles 2))
@@ -125,8 +127,11 @@
           (mutable obstacles)))
 (define physics (make-physics))
 
+(defun position-from-body (body)
+  (self body :getPosition))
+
 (defun physics-player-position (physics)
-  (self (physics-harvester-main physics) :getPosition))
+  (position-from-body (physics-harvester-main physics)))
 
 (define gamestate-start {})
 (define gamestate-main {})
@@ -197,19 +202,11 @@
           (dolist ([pos harvester-head-positions])
                   (with (piece (self world :newRectangleCollider (+ origin-x pos) origin-y harvester-head-piece-width harvester-head-piece-width))
                         (self piece :setCollisionClass "Head")
-                        piece))]
-         [obstacles
-          (dolist ([i (range :from 1 :to 1)])
-                  (let* ([pos-x (* (random) field-width-world)]
-                         [pos-y (+ (* 10 start-y) (* (random) (- field-height-world (* 10 start-y))))]
-                         [obstacle (self world :newCircleCollider pos-x pos-y 20)])
-                    (self obstacle :setType "static")
-                    (self obstacle :setCollisionClass "Obstacle")
-                    obstacle))])
+                        piece))])
     (set-physics-world! physics world)
     (set-physics-harvester-main! physics harvester-main)
     (set-physics-harvester-head-pieces! physics harvester-head-pieces)
-    (set-physics-obstacles! physics obstacles)
+    (set-physics-obstacles! physics (list))
     (self harvester-main :setLinearDamping 0.5)
     (for i 1 harvester-head-piece-count 1
          (let* ([piece (nth harvester-head-pieces i)]
@@ -235,6 +232,28 @@
          [field (state-field state)]
          [(_ player-tile-y) (field-tile-from-world x y player-origin-tile-y)])
     (field-shift-y (state-field state) player-tile-y))
+
+  (let* ([obstacles (physics-obstacles physics)]
+         [obstacles-new (list)])
+    ;; delete obstacles that are out of view
+    (for i 1 (n obstacles) 1
+         (let* ([obstacle (nth obstacles i)]
+                [(x y) (position-from-body obstacle)]
+                [(_ tile-y) (field-tile-from-world x y (field-tile-offset-y (state-field state)))])
+           (if (>= tile-y 1)
+               (push! obstacles-new obstacle)
+               (self obstacle :destroy))))
+    ;; generate new obstacles
+    (for i 1 (- obstacle-count-max (n obstacles-new)) 1
+         (let* ([pos-x (* (random) field-width-world)]
+                [(_ player-y) (physics-player-position physics)]
+                ;; generate new obstacles out of view
+                [pos-y (+ player-y field-height-world (* (random) field-height-world))]
+                [obstacle (self (physics-world physics) :newCircleCollider pos-x pos-y 20)])
+           (self obstacle :setType "static")
+           (self obstacle :setCollisionClass "Obstacle")
+           (push! obstacles-new obstacle)))
+    (set-physics-obstacles! physics obstacles-new))
 
   (self (physics-world physics) :update dt)
   (let* ([(x y) (physics-player-position physics)]
