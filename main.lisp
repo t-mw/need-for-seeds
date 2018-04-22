@@ -5,10 +5,11 @@
 (import hump/camera)
 (import hump/gamestate)
 (import lua/basic (mod))
-(import lua/math (cos sin pi floor max random randomseed))
+(import lua/math (cos sin deg rad pi floor max random randomseed))
 (import lua/os)
 (import lua/string)
 (import love/audio)
+(import love/filesystem)
 (import love/graphics)
 (import love/keyboard)
 (import love/love (defevent))
@@ -16,6 +17,7 @@
 (import love-repl)
 (import lume)
 (import math/vector ())
+(import model-viewer)
 (import windfield)
 
 (defun vector-x (v)
@@ -208,6 +210,28 @@
                (love/graphics/rectangle "line" x y field-tile-size field-tile-size))))
     (self (physics-world physics) :draw)
 
+    (love/graphics/set-color 255 255 255)
+    (love/graphics/push)
+    (love/graphics/scale -1 -1)
+    (with (angle (self (physics-harvester-main physics) :getAngle))
+          (.<! resources-model-harvester :rotation (deg angle)))
+    (with ((x y) (physics-player-position physics))
+          (self resources-model-harvester :drawModel (- 0 x) (- 0 y)))
+
+    (let* ([pieces (physics-harvester-head-pieces physics)]
+           [piece-states (state-harvester-head-pieces state)])
+      (for i 1 (n pieces) 1
+           (let ([piece (nth pieces i)]
+                 [piece-state (nth piece-states i)]
+                 [flip (= 0 (mod (+ (floor (/ (love/timer/get-time) 0.05)) (mod i 2)) 2))])
+             (with (angle (self piece :getAngle))
+                   (.<! resources-model-blades :rotation (deg angle)))
+             (.<! resources-model-blades :zoom 0.25)
+             (.<! resources-model-blades :flip (and piece-state flip))
+             (with ((x y) (position-from-body piece))
+                   (self resources-model-blades :drawModel (- 0 x) (- 0 y))))))
+    (love/graphics/pop)
+
     ;; draw physics centers
     ;; (love/graphics/set-color 255 255 255)
     ;; (do ([o (physics-harvester-head-pieces physics)])
@@ -228,6 +252,10 @@
 
 (define resources-music-intro :mutable nil)
 (define resources-music-loop :mutable nil)
+
+(define resources-model-blades (model-viewer/new (love/filesystem/new-file "assets/sprite-blades.png")))
+(define resources-model-harvester (model-viewer/new (love/filesystem/new-file "assets/sprite-harvester.png") true))
+
 (defun load-resources ()
   (setq! resources-audio-engine
          (love/audio/new-source "assets/audio-engine.wav" "static"))
