@@ -111,7 +111,8 @@
           (mutable harvester-head-pieces)
           (mutable field)
           (mutable moving)
-          (mutable start-time)))
+          (mutable start-time)
+          (mutable score)))
 (define state (make-state))
 
 (define audio-queue (list))
@@ -143,6 +144,46 @@
 
 (defun camera-position (player-x player-y)
   (values-list player-x (+ player-y 200)))
+
+(defun handle-harvester-collisions ()
+  (let ([pieces (physics-harvester-head-pieces physics)]
+        [piece-states (state-harvester-head-pieces state)]
+        [field-data (field-data (state-field state))]
+        [field-tile-offset-y (field-tile-offset-y (state-field state))]
+        [to-destroy (list)])
+    (for i 1 (n pieces) 1
+         (let ([piece (nth pieces i)]
+               [piece-state (nth piece-states i)])
+           (when piece-state
+                 (if (self piece :enter "Obstacle")
+                     (push! to-destroy i)
+                     (let* ([(x y) (self piece :getPosition)]
+                            [(tile-x tile-y) (field-tile-from-world x y field-tile-offset-y)]
+                            [idx (field-tile-to-1d-idx tile-x tile-y)])
+                       (when (and (field-is-valid-tile tile-x tile-y) (nth field-data idx))
+                             (setq! (nth field-data idx) false)
+                             (set-state-score! state (+ (state-score state) 1))))))))
+
+    (let ([destroy-piece (lambda (i)
+                           (with (piece (nth pieces i))
+                                 (do ([joint (struct->list (self piece :getJointList))])
+                                     (self joint :destroy))
+                                 (self piece :setCollisionClass "Ghost")
+                                 (setq! (nth piece-states i) false)
+                                 (love/audio/play resources-audio-hurt)))]
+          [mid-idx (floor (/ (n pieces) 2))])
+      (with (tmp-state true)
+            (for i (+ mid-idx 1) (n pieces) 1
+                 (when (elem? i to-destroy)
+                       (setq! tmp-state false))
+                 (when (and (not tmp-state) (nth piece-states i))
+                       (destroy-piece i))))
+      (with (tmp-state true)
+            (for i mid-idx 1 -1
+                 (when (elem? i to-destroy)
+                       (setq! tmp-state false))
+                 (when (and (not tmp-state) (nth piece-states i))
+                       (destroy-piece i)))))))
 
 (define gamestate-start {})
 (define gamestate-main {})
@@ -230,7 +271,8 @@
   (set-state-harvester-head-pieces! state (map (lambda () true) (physics-harvester-head-pieces physics)))
   (set-state-field! state (create-field))
   (set-state-moving! state false)
-  (set-state-start-time! state 0))
+  (set-state-start-time! state 0)
+  (set-state-score! state 0))
 
 (defevent (gamestate-main :update) (dt)
   (audio-queue-update)
@@ -278,43 +320,9 @@
          [(new-x new-y) (camera-position (physics-player-position physics))])
     (when (> new-y (.> camera :y))
           (self camera :lockPosition new-x new-y)))
-  (let ([pieces (physics-harvester-head-pieces physics)]
-        [piece-states (state-harvester-head-pieces state)]
-        [field-data (field-data (state-field state))]
-        [field-tile-offset-y (field-tile-offset-y (state-field state))]
-        [to-destroy (list)])
-    (for i 1 (n pieces) 1
-         (let ([piece (nth pieces i)]
-               [piece-state (nth piece-states i)])
-           (when piece-state
-                 (if (self piece :enter "Obstacle")
-                     (push! to-destroy i)
-                     (let* ([(x y) (self piece :getPosition)]
-                            [(tile-x tile-y) (field-tile-from-world x y field-tile-offset-y)]
-                            [idx (field-tile-to-1d-idx tile-x tile-y)])
-                       (when (and (field-is-valid-tile tile-x tile-y) (nth field-data idx))
-                             (setq! (nth field-data idx) false)))))))
 
-    (let ([destroy-piece (lambda (i)
-                           (with (piece (nth pieces i))
-                                 (do ([joint (struct->list (self piece :getJointList))])
-                                     (self joint :destroy))
-                                 (self piece :setCollisionClass "Ghost")
-                                 (setq! (nth piece-states i) false)
-                                 (love/audio/play resources-audio-hurt)))]
-          [mid-idx (floor (/ (n pieces) 2))])
-      (with (tmp-state true)
-            (for i (+ mid-idx 1) (n pieces) 1
-                 (when (elem? i to-destroy)
-                       (setq! tmp-state false))
-                 (when (and (not tmp-state) (nth piece-states i))
-                       (destroy-piece i))))
-      (with (tmp-state true)
-            (for i mid-idx 1 -1
-                 (when (elem? i to-destroy)
-                       (setq! tmp-state false))
-                 (when (and (not tmp-state) (nth piece-states i))
-                       (destroy-piece i))))))
+  (when (state-moving state)
+        (handle-harvester-collisions))
 
   (let ([up (love/keyboard/is-down "up")]
         [left (love/keyboard/is-down "left")]
@@ -358,7 +366,8 @@
     (love/graphics/origin)
 
     (love/graphics/set-color 255 255 255)
-    (love/graphics/print (seconds-to-clock (- (love/timer/get-time) (state-start-time state) 0 0)))))
+    (love/graphics/print (seconds-to-clock (- (love/timer/get-time) (state-start-time state) 0 0)))
+    (love/graphics/print (state-score state) 0 20)))
 
 (defevent (gamestate-main :keypressed) (key code)
   (case key
