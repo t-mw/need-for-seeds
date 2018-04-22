@@ -85,10 +85,10 @@
   (set-field-tile-offset-y! field y))
 
 (defun field-tile-from-world (x y tile-offset-y)
-  (values-list (floor (/ x field-tile-size)) (- (floor (/ y field-tile-size)) tile-offset-y)))
+  (values-list (+ (floor (/ x field-tile-size)) 1) (+ (- (floor (/ y field-tile-size)) tile-offset-y) 1)))
 
 (defun field-tile-to-world (x y tile-offset-y)
-  (values-list (* x field-tile-size) (* (+ y tile-offset-y) field-tile-size)))
+  (values-list (* (- x 1) field-tile-size) (* (- (+ y tile-offset-y) 1) field-tile-size)))
 
 (defun field-tile-to-1d-idx (tile-x tile-y)
   (to-1d-idx tile-x tile-y field-width-tiles))
@@ -133,7 +133,8 @@
   (fields (mutable world)
           (mutable harvester-main)
           (mutable harvester-head-pieces)
-          (mutable obstacles)))
+          (mutable obstacles)
+          (mutable walls)))
 (define physics (make-physics))
 
 (defun position-from-body (body)
@@ -254,11 +255,19 @@
           (dolist ([pos harvester-head-positions])
                   (with (piece (self world :newRectangleCollider (+ origin-x pos) origin-y harvester-head-piece-width harvester-head-piece-width))
                         (self piece :setCollisionClass "Head")
-                        piece))])
+                        piece))]
+         [walls (dolist
+                 ([wall (list
+                         (self world :newRectangleCollider field-width-world 0 100 999999999)
+                         (self world :newRectangleCollider -100 0 100 999999999)
+                         (self world :newRectangleCollider 0 -100 field-width-world 100))])
+                 (self wall :setType "static")
+                 wall)])
     (set-physics-world! physics world)
     (set-physics-harvester-main! physics harvester-main)
     (set-physics-harvester-head-pieces! physics harvester-head-pieces)
     (set-physics-obstacles! physics (list))
+    (set-physics-walls! physics walls)
     (self harvester-main :setLinearDamping 0.5)
     (for i 1 harvester-head-piece-count 1
          (let* ([piece (nth harvester-head-pieces i)]
@@ -304,11 +313,12 @@
                (self obstacle :destroy))))
     ;; generate new obstacles
     (for i 1 (- obstacle-count-max (n obstacles-new)) 1
-         (let* ([pos-x (* (random) field-width-world)]
+         (let* ([radius 20]
+                [pos-x (+ radius (* (random) (- field-width-world (* 2 radius))))]
                 [(_ player-y) (physics-player-position physics)]
                 ;; generate new obstacles out of view
                 [pos-y (+ player-y field-height-world (* (random) field-height-world))]
-                [obstacle (self (physics-world physics) :newCircleCollider pos-x pos-y 20)])
+                [obstacle (self (physics-world physics) :newCircleCollider pos-x pos-y radius)])
            (self obstacle :setType "static")
            (self obstacle :setCollisionClass "Obstacle")
            (push! obstacles-new obstacle)))
@@ -362,6 +372,14 @@
                (love/graphics/rectangle "fill" x y field-tile-size field-tile-size)
                (love/graphics/rectangle "line" x y field-tile-size field-tile-size))))
     (self (physics-world physics) :draw)
+
+    ;; draw physics centers
+    ;; (love/graphics/set-color 255 255 255)
+    ;; (do ([o (physics-harvester-head-pieces physics)])
+    ;;     (let* ([(x y) (position-from-body o)])
+    ;;       (love/graphics/circle "fill" x y 5)))
+    ;; (love/graphics/line 0 200 field-width-world 200)
+
     (self camera :detach)
     (love/graphics/origin)
 
