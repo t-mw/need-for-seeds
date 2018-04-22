@@ -1,50 +1,54 @@
 
-ModelViewer =
-{
-    model = false,
-    isVox = false,
-    src,
-    file,
-    image,
-    quads,
-    quadWidth=16,
-    quadHeight=16,
-    updateTimer=0,
-    widthInput  = {text="16"},
-    heightInput = {text="16"},
-    spaceInput  = {text="1"},
-    hideUI = false,
-    --View
-    rotation = 0,
-    layer_spacing = 1,
-    voxelMode = false,
-    autoRotate = true,
-    rotateDir = 1,
-    flip = false,
-    rotate_speed = 30,
-    rotateSlider = {value = 50, min = 0, max = 150},
-    zoom = 1,
-    nearest=true,
+local ModelViewer = {}
+ModelViewer.__index = ModelViewer
 
-}
+function ModelViewer.new(file, voxelMode)
 
+    local data = {
+        model = false,
+        isVox = false,
+        src,
+        file,
+        image,
+        quads,
+        quadWidth=16,
+        quadHeight=16,
+        updateTimer=0,
+        widthInput  = {text="16"},
+        heightInput = {text="16"},
+        spaceInput  = {text="1"},
+        hideUI = true,
+        --View
+        rotation = 0,
+        layer_spacing = 1,
+        voxelMode = voxelMode,
+        autoRotate = true,
+        rotateDir = 1,
+        flip = false,
+        rotate_speed = 30,
+        rotateSlider = {value = 50, min = 0, max = 150},
+        zoom = 1,
+        nearest=true,
+    }
 
-function ModelViewer:new(file, isVox)
-    self.src = file:getFilename()
-    self.file = file
-    self.model = true
-    self.zoom = 1
+    setmetatable(data, ModelViewer)
 
-    self.isVox = isVox or false
-    if self.isVox then
-        self.loading = false
-        self:loadModel()
+    data.src = file:getFilename()
+    data.file = file
+    data.model = true
+    data.zoom = 1
+
+    data.isVox = isVox or false
+    if data.isVox then
+        data.loading = false
+        data:loadModel()
     else
-        self:loadImage()
+        data:loadImage()
     end
 
-    self:createQuads(true)
+    data:createQuads(true)
 
+    return data
 end
 
 function ModelViewer:loadModel()
@@ -227,14 +231,6 @@ function ModelViewer:drawModel(x,y)
             if j>1 and not self.voxelMode then break end
         end
     end
-
-    scale = WINDOW_W/self.image:getWidth()
-    if not self.isVox then
-        love.graphics.draw(self.image, 0, WINDOW_H-self.image:getHeight()*scale, 0, scale, scale)
-    else
-        love.graphics.draw(self.canvas, 0, WINDOW_H-self.image:getHeight()*1, 0, 1, 1)
-    end
-
 end
 
 return ModelViewer

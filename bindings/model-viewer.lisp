@@ -1,1 +1,1 @@
-(define-native *model-viewer*)
+(define-native new)
