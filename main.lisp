@@ -75,6 +75,9 @@
 (defun generate-field-rand ()
   (floor (* (random) 1000)))
 
+(defun rand-to-quad (rand)
+  (nth resources-quads-corn (+ (mod rand (n resources-quads-corn)) 1)))
+
 (defun create-field ()
   (let ([data (list)]
         [rand (list)])
@@ -252,9 +255,7 @@
                [height resources-sprite-stump-height])
           (love/graphics/draw resources-sprite-stump x y c-rot 1 1 (/ width 2) (/ height 2))))
 
-    (let* ([rand-to-quad (lambda (rand)
-                           (nth resources-quads-corn (+ (mod rand (n resources-quads-corn)) 1)))]
-           [field (state-field state)]
+    (let* ([field (state-field state)]
            [field-data (field-data field)]
            [field-rand (field-rand field)]
            [field-tile-offset-y (field-tile-offset-y field)])
@@ -268,17 +269,6 @@
                          (love/graphics/draw resources-sprite-corn quad x y c-rot))
                    (with (quad (rand-to-quad (+ rand 4)))
                          (love/graphics/draw resources-sprite-corn quad x y c-rot)))))
-      (do ([flying-corn flying-corns])
-          (let* ([dir (+ (flying-corn-dir flying-corn) c-rot)]
-                 [frac (flying-corn-frac flying-corn time)]
-                 [distance (* 50 frac)]
-                 [height (* 80 (sin (* frac pi)))]
-                 [rand (flying-corn-rand flying-corn)]
-                 [quad (rand-to-quad rand)]
-                 [pos (flying-corn-pos flying-corn)]
-                 [x (floor (+ (vector-item pos 1) (* distance (cos dir))))]
-                 [y (floor (+ (vector-item pos 2) (* distance (sin dir)) height))])
-            (love/graphics/draw resources-sprite-corn quad x y dir 1 1 (/ resources-sprite-corn-width 2) (/ resources-sprite-corn-height 2))))
 
       (love/graphics/set-color 0 0 0 20)
       (love/graphics/polygon "fill" (self (physics-harvester-main physics) :getWorldPoints (self (physics-harvester-main physics) :getPoints)))
@@ -307,6 +297,18 @@
         (self resources-model-harvester :drawModel (* -1 x) (- (* -1 y) 20)))
 
       (love/graphics/pop)
+
+      (do ([flying-corn flying-corns])
+          (let* ([dir (+ (flying-corn-dir flying-corn) c-rot)]
+                 [frac (flying-corn-frac flying-corn time)]
+                 [distance (* 50 frac)]
+                 [height (* 80 (sin (* frac pi)))]
+                 [rand (flying-corn-rand flying-corn)]
+                 [quad (rand-to-quad rand)]
+                 [pos (flying-corn-pos flying-corn)]
+                 [x (floor (+ (vector-item pos 1) (* distance (cos dir))))]
+                 [y (floor (+ (vector-item pos 2) (* distance (sin dir)) height))])
+            (love/graphics/draw resources-sprite-corn quad x y dir 1 1 (/ resources-sprite-corn-width 2) (/ resources-sprite-corn-height 2))))
 
       ;; draw physics centers
       ;; (love/graphics/set-color 255 255 255)
@@ -594,6 +596,9 @@
   (love/audio/play resources-audio-victory)
   (setq! flying-corns (list)))
 
+(defevent (gamestate-end :update) (dt)
+  (self (physics-world physics) :update dt))
+
 (defevent (gamestate-end :keypressed) (key code)
   (case key
     ["space" (hump/gamestate/switch gamestate-main)]
@@ -609,9 +614,9 @@
     (love/graphics/set-font resources-font-large)
     (love/graphics/printf (concat (list (state-score state) " seeds!")) (- (/ width 2) 300) (- (/ height 2) 220) 600 "center")
     (love/graphics/set-font resources-font-small)
-    (love/graphics/printf "and an average speed of" (- (/ width 2) 300) (- (/ height 2) 100) 600 "center")
+    (love/graphics/printf "and an average speed of" (- (/ width 2) 300) (- (/ height 2) 80) 600 "center")
     (love/graphics/set-font resources-font-large)
-    (love/graphics/printf (concat (list (floor (state-avg-speed state)) " mph!")) (- (/ width 2) 300) (- (/ height 2) 70) 600 "center")
+    (love/graphics/printf (concat (list (floor (state-avg-speed state)) " mph!")) (- (/ width 2) 300) (- (/ height 2) 50) 600 "center")
     (love/graphics/set-font resources-font-small)
     (love/graphics/printf (win-message (state-score state)) (- (/ width 2) 300) (- height 210) 600 "center")
     (love/graphics/printf "space to restart" (- (/ width 2) 300) (- height 100) 600 "center")))
