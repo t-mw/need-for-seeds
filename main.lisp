@@ -5,7 +5,7 @@
 (import hump/camera)
 (import hump/gamestate)
 (import lua/basic (mod))
-(import lua/math (cos sin pi floor random randomseed))
+(import lua/math (cos sin pi floor max random randomseed))
 (import lua/os)
 (import lua/string)
 (import love/audio)
@@ -364,7 +364,7 @@
   (let* ([camera (state-camera state)]
          ;; place player at bottom of screen
          [(new-x new-y) (camera-position (physics-player-position physics))])
-    (when (> new-y (.> camera :y))
+    (let ([new-y (max new-y (.> camera :y))])
           (self camera :lockPosition new-x new-y)))
 
   (when (state-moving state)
