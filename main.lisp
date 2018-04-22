@@ -298,17 +298,20 @@
       (love/graphics/pop)
 
       (love/graphics/set-color 100 100 100)
-      (let* ([pieces (physics-harvester-head-pieces physics)]
-             [harvester-main (physics-harvester-main physics)]
-             [joint (car (struct->list (self harvester-main :getJointList)))]
-             [(x1 y1) (self joint :getAnchors)]
-             [mid-idx (floor (/ (n pieces) 2))]
-             [(xx1 yy1) (self (nth pieces mid-idx) :getPosition)]
-             [(xx2 yy2) (self (nth pieces (+ mid-idx 1)) :getPosition)]
-             [x2 (/ (+ xx1 xx2) 2)]
-             [y2 (/ (+ yy1 yy2) 2)])
-        (love/graphics/set-line-width 10)
-        (love/graphics/line x1 (+ y1 20) x2 y2))
+      (let* ([piece-states (state-harvester-head-pieces state)]
+             [mid-idx1 (floor (/ (n piece-states) 2))]
+             [mid-idx2 (+ mid-idx1 1)])
+        (when (and (nth piece-states mid-idx1) (nth piece-states mid-idx2))
+              (let* ([pieces (physics-harvester-head-pieces physics)]
+                     [harvester-main (physics-harvester-main physics)]
+                     [joint (car (struct->list (self harvester-main :getJointList)))]
+                     [(x1 y1) (self joint :getAnchors)]
+                     [(xx1 yy1) (self (nth pieces mid-idx1) :getPosition)]
+                     [(xx2 yy2) (self (nth pieces mid-idx2) :getPosition)]
+                     [x2 (/ (+ xx1 xx2) 2)]
+                     [y2 (/ (+ yy1 yy2) 2)])
+                (love/graphics/set-line-width 10)
+                (love/graphics/line x1 (+ y1 20) x2 y2))))
 
       (love/graphics/set-color 255 255 255)
       (love/graphics/push)
