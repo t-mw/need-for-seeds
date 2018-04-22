@@ -112,6 +112,7 @@
           (mutable field)
           (mutable moving)
           (mutable start-time)
+          (mutable end-time)
           (mutable score)))
 (define state (make-state))
 
@@ -186,8 +187,40 @@
                  (when (and (not tmp-state) (nth piece-states i))
                        (destroy-piece i)))))))
 
+(defun world-draw ()
+  (let ([width (love/graphics/get-width)]
+        [height (love/graphics/get-height)]
+        [camera (state-camera state)])
+    ;; (0 0) is at bottom-middle of screen.
+    ;; x +ve is right, y +ve is up.
+    (self camera :attach)
+    (love/graphics/line 0 0 10 10)
+    (love/graphics/set-color 50 100 50)
+    (for i 1 (field-max-idx) 1
+         (let* ([field (state-field state)]
+                [field-data (field-data field)]
+                [field-tile-offset-y (field-tile-offset-y field)]
+                [(tile-x tile-y) (field-tile-from-1d-idx i)]
+                [v (nth field-data i)]
+                [(x y) (field-tile-to-world tile-x tile-y field-tile-offset-y)])
+           (if v
+               (love/graphics/rectangle "fill" x y field-tile-size field-tile-size)
+               (love/graphics/rectangle "line" x y field-tile-size field-tile-size))))
+    (self (physics-world physics) :draw)
+
+    ;; draw physics centers
+    ;; (love/graphics/set-color 255 255 255)
+    ;; (do ([o (physics-harvester-head-pieces physics)])
+    ;;     (let* ([(x y) (position-from-body o)])
+    ;;       (love/graphics/circle "fill" x y 5)))
+    ;; (love/graphics/line 0 200 field-width-world 200)
+
+    (self camera :detach)
+    (love/graphics/origin)))
+
 (define gamestate-start {})
 (define gamestate-main {})
+(define gamestate-end {})
 (define gamestate-repl {})
 
 (define resources-audio-hurt :mutable nil)
@@ -223,6 +256,8 @@
   (hump/gamestate/switch gamestate-main))
 
 (defevent :update (dt))
+
+(defevent :draw ())
 
 (defevent :keypressed (key code)
   (when (and (not (love-repl/toggled)) (= key "f8"))
@@ -281,6 +316,7 @@
   (set-state-field! state (create-field))
   (set-state-moving! state false)
   (set-state-start-time! state 0)
+  (set-state-end-time! state 0)
   (set-state-score! state 0))
 
 (defevent (gamestate-main :update) (dt)
@@ -350,47 +386,33 @@
           (set-state-moving! state true)))
   (let* ([harvester-main (physics-harvester-main physics)]
          [pitch (+ 1 (/ (norm (vector (self harvester-main :getLinearVelocity))) 100))])
-    (self resources-audio-engine :setPitch pitch)))
+    (self resources-audio-engine :setPitch pitch))
+
+  (unless (elem? true (state-harvester-head-pieces state))
+          (set-state-end-time! state (love/timer/get-time))))
 
 (defevent (gamestate-main :draw) ()
-  (let ([width (love/graphics/get-width)]
-        [height (love/graphics/get-height)]
-        [camera (state-camera state)])
-    ;; (0 0) is at bottom-middle of screen.
-    ;; x +ve is right, y +ve is up.
-    (self camera :attach)
-    (love/graphics/line 0 0 10 10)
-    (love/graphics/set-color 50 100 50)
-    (for i 1 (field-max-idx) 1
-         (let* ([field (state-field state)]
-                [field-data (field-data field)]
-                [field-tile-offset-y (field-tile-offset-y field)]
-                [(tile-x tile-y) (field-tile-from-1d-idx i)]
-                [v (nth field-data i)]
-                [(x y) (field-tile-to-world tile-x tile-y field-tile-offset-y)])
-           (if v
-               (love/graphics/rectangle "fill" x y field-tile-size field-tile-size)
-               (love/graphics/rectangle "line" x y field-tile-size field-tile-size))))
-    (self (physics-world physics) :draw)
+  (world-draw)
 
-    ;; draw physics centers
-    ;; (love/graphics/set-color 255 255 255)
-    ;; (do ([o (physics-harvester-head-pieces physics)])
-    ;;     (let* ([(x y) (position-from-body o)])
-    ;;       (love/graphics/circle "fill" x y 5)))
-    ;; (love/graphics/line 0 200 field-width-world 200)
+  (love/graphics/set-color 255 255 255)
+  (love/graphics/print (seconds-to-clock (- (love/timer/get-time) (state-start-time state) 0 0)))
+  (love/graphics/print (state-score state) 0 20)
 
-    (self camera :detach)
-    (love/graphics/origin)
+  ;; switching state in 'update' causes gamestate drawing to be skipped for one frame
+  (when (> (state-end-time state) 0)
+        (hump/gamestate/switch gamestate-end)))
 
-    (love/graphics/set-color 255 255 255)
-    (love/graphics/print (seconds-to-clock (- (love/timer/get-time) (state-start-time state) 0 0)))
-    (love/graphics/print (state-score state) 0 20)))
-
-(defevent (gamestate-main :keypressed) (key code)
+(defevent (gamestate-end :keypressed) (key code)
   (case key
-    ["space" (hump/gamestate/switch gamestate-start)]
+    ["space" (hump/gamestate/switch gamestate-main)]
     [?default]))
+
+(defevent (gamestate-end :draw) ()
+  (world-draw)
+
+  (love/graphics/set-color 255 255 255)
+  (love/graphics/print (seconds-to-clock (- (state-end-time state) (state-start-time state) 0 0)))
+  (love/graphics/print (state-score state) 0 20))
 
 (defevent (gamestate-repl :wheelmoved) (x y)
   (love-repl/wheelmoved x y))
